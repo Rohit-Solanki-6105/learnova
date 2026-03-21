@@ -69,9 +69,10 @@ const Editor = ({ is_editting, file, setFile }: EditorProps) => {
             const List = (await import("@editorjs/list")).default;
             const NestedList = (await import("@editorjs/nested-list")).default;
             const Warning = (await import("@editorjs/warning")).default;
-            const Embed = (await import("@editorjs/embed")).default;
+            const EmbedUrlTool = (await import("./EmbedUrlTool")).default;
             const Table = (await import("@editorjs/table")).default;
-            const ImageTool = (await import("@editorjs/image")).default;
+            const ImageUrlTool = (await import("./ImageUrlTool")).default;
+            const VideoUrlTool = (await import("./VideoUrlTool")).default;
             const Paragraph = (await import("@editorjs/paragraph")).default;
 
             if (!editorRef.current) {
@@ -85,48 +86,10 @@ const Editor = ({ is_editting, file, setFile }: EditorProps) => {
                         list: List,
                         nestedList: NestedList,
                         warning: Warning,
-                        embed: {
-                            class: Embed,
-                            config: {
-                                services: {
-                                    youtube: true,
-                                    twitter: true,
-                                    instagram: true,
-                                    codepen: true,
-                                    vimeo: true,
-                                    imgur: true
-                                }
-                            }
-                        },
+                        embed: EmbedUrlTool,
                         table: Table,
-                        image: {
-                            class: ImageTool,
-                            config: {
-                                // Editor.js completely hides the "Paste URL" input field if endpoints are missing.
-                                // We put fake ones here to force the UI to render. They are NEVER called!
-                                endpoints: {
-                                    byFile: 'fake',
-                                    byUrl: 'fake',
-                                },
-                                uploader: {
-                                    // Bypass backend by resolving promises directly
-                                    uploadByFile(file: File) {
-                                        return Promise.resolve({
-                                            success: 1,
-                                            file: {
-                                                url: URL.createObjectURL(file),
-                                            }
-                                        });
-                                    },
-                                    uploadByUrl(url: string) {
-                                        return Promise.resolve({
-                                            success: 1,
-                                            file: { url }
-                                        });
-                                    }
-                                }
-                            }
-                        }
+                        image: ImageUrlTool,
+                        video: VideoUrlTool
                     },
                     onChange: async () => {
                         if (editorRef.current) {

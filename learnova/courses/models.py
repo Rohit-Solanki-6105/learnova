@@ -1,6 +1,12 @@
 from django.db import models
 from django.conf import settings
 
+class Tag(models.Model):
+    name = models.CharField(max_length=50, unique=True)
+
+    def __str__(self):
+        return self.name
+
 class Course(models.Model):
     VISIBILITY_CHOICES = (
         (1, 'Everyone'),
@@ -25,6 +31,7 @@ class Course(models.Model):
     total_lesson = models.IntegerField(default=0)
     total_duration = models.IntegerField(default=0, help_text="Duration in minutes or seconds")
     responsible = models.ForeignKey(settings.AUTH_USER_MODEL, related_name='responsible_courses', on_delete=models.SET_NULL, null=True)
+    tags = models.ManyToManyField(Tag, related_name='courses', blank=True, db_table='tagged_courses')
 
     def __str__(self):
         return self.title
