@@ -180,8 +180,8 @@ const Editor = ({ is_editting, file, setFile }: EditorProps) => {
                     )}
                 </div>
             </div>
-            <div className={`p-6 md:p-10 flex-1 bg-white dark:bg-slate-950 ${is_editting ? 'cursor-text' : 'cursor-default'}`}>
-                <div id="editorjs-container" className="prose prose-indigo dark:prose-invert max-w-none min-h-100 prose-headings:font-bold prose-a:text-indigo-600 prose-img:rounded-xl" />
+            <div className={`py-6 pr-6 pl-14 md:py-10 md:pr-10 md:pl-20 flex-1 bg-white dark:bg-slate-950 ${is_editting ? 'cursor-text' : 'cursor-default'}`}>
+                <div id="editorjs-container" className="prose prose-indigo dark:prose-invert max-w-none min-h-[200px] prose-headings:font-bold prose-a:text-indigo-600 prose-img:rounded-xl" />
             </div>
         </div>
     );
