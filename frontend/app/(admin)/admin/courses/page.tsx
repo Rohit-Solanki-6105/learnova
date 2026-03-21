@@ -1,12 +1,16 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { Kanban } from "react-kanban-kit";
-import { Search, LayoutGrid, List, Plus, Edit2, Share2, Eye, Clock, BookOpen, X } from "lucide-react";
+import { Search, LayoutGrid, List, Plus, Edit2, Eye, Clock, BookOpen, Loader2, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
+import CreateCourseModal from "@/components/CreateCourseModal";
+import { fetchWithAuth } from "@/lib/auth";
 
 type CourseStatus = "Draft" | "Published" | "Archived";
+
+const STATUS_NUM_TO_STR: Record<number, CourseStatus> = { 1: "Draft", 2: "Published", 3: "Archived" };
 
 type Course = {
     id: string;
@@ -18,75 +22,73 @@ type Course = {
     status: CourseStatus;
 };
 
-const INITIAL_COURSES: Course[] = [
-    { id: "c1", title: "Mastering UI/UX Systems", tags: ["Design", "Pro"], views: 1200, totalLessons: 48, totalDuration: "12h 45m", status: "Published" },
-    { id: "c2", title: "Advanced React Patterns", tags: ["Frontend", "Code"], views: 850, totalLessons: 32, totalDuration: "8h 20m", status: "Published" },
-    { id: "c3", title: "Introduction to Figma", tags: ["Design", "Beginner"], views: 0, totalLessons: 15, totalDuration: "3h 10m", status: "Draft" },
-    { id: "c4", title: "Legacy Angular Course", tags: ["Code"], views: 3200, totalLessons: 55, totalDuration: "16h 00m", status: "Archived" },
-];
+function mapApiCourse(c: any): Course {
+    return {
+        id: String(c.id),
+        title: c.title,
+        tags: (c.tags || []).map((t: any) => (typeof t === "string" ? t : t.name)),
+        views: 0,
+        totalLessons: c.total_lesson ?? (c.lessons?.length ?? 0),
+        totalDuration: c.total_duration ? `${c.total_duration}m` : "—",
+        status: STATUS_NUM_TO_STR[c.status] ?? "Draft",
+    };
+}
 
 export default function CoursesAdminPage() {
     const router = useRouter();
-    const [courses, setCourses] = useState<Course[]>(INITIAL_COURSES);
+    const [courses, setCourses] = useState<Course[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [fetchError, setFetchError] = useState<string | null>(null);
     const [view, setView] = useState<"kanban" | "list">("kanban");
     const [searchQuery, setSearchQuery] = useState("");
     const [isModalOpen, setIsModalOpen] = useState(false);
-    const [newCourseName, setNewCourseName] = useState("");
 
-    const filteredCourses = courses.filter((c) =>
-        c.title.toLowerCase().includes(searchQuery.toLowerCase())
-    );
+    const loadCourses = useCallback(async () => {
+        setLoading(true);
+        setFetchError(null);
+        try {
+            const res = await fetchWithAuth("/courses/");
+            if (!res.ok) throw new Error(`Server responded with ${res.status}`);
+            const data = await res.json();
+            setCourses(data.map(mapApiCourse));
+        } catch (err: any) {
+            setFetchError(err.message || "Failed to load courses");
+        } finally {
+            setLoading(false);
+        }
+    }, []);
 
-    const handleCreateCourse = (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!newCourseName.trim()) return;
-        const newCourse: Course = {
-            id: `c${Date.now()}`,
-            title: newCourseName,
-            tags: [],
-            views: 0,
-            totalLessons: 0,
-            totalDuration: "0h",
-            status: "Draft",
-        };
-        setCourses([...courses, newCourse]);
-        setNewCourseName("");
+    useEffect(() => { loadCourses(); }, [loadCourses]);
+
+    const onCourseCreated = (newCourse: Course) => {
+        setCourses(prev => [...prev, newCourse]);
         setIsModalOpen(false);
-        toast.success("Course created successfully!", {
-            action: {
-                label: "Edit Course",
-                onClick: () => router.push(`/admin/courses/${newCourse.id}`),
-            },
+        toast.success("Course created!", {
+            action: { label: "Edit", onClick: () => router.push(`/admin/courses/${newCourse.id}`) },
         });
     };
 
-    // Build Kanban data source
-    const draftCourses = filteredCourses.filter(c => c.status === "Draft");
+    const filteredCourses = courses.filter(c =>
+        c.title.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+
+    // ─── Kanban Setup ─────────────────────────────────────────────────────────
+    const draftCourses    = filteredCourses.filter(c => c.status === "Draft");
     const publishedCourses = filteredCourses.filter(c => c.status === "Published");
-    const archivedCourses = filteredCourses.filter(c => c.status === "Archived");
+    const archivedCourses  = filteredCourses.filter(c => c.status === "Archived");
 
     const kanbanDataSource: any = {
-        root: {
-            id: "root",
-            title: "Root",
-            children: ["col-draft", "col-published", "col-archived"],
-            totalChildrenCount: 3,
-            parentId: null,
-        },
-        "col-draft": { id: "col-draft", title: "Draft", children: draftCourses.map(c => c.id), totalChildrenCount: draftCourses.length, parentId: "root" },
+        root: { id: "root", title: "Root", children: ["col-draft", "col-published", "col-archived"], totalChildrenCount: 3, parentId: null },
+        "col-draft":     { id: "col-draft",     title: "Draft",     children: draftCourses.map(c => c.id),     totalChildrenCount: draftCourses.length,     parentId: "root" },
         "col-published": { id: "col-published", title: "Published", children: publishedCourses.map(c => c.id), totalChildrenCount: publishedCourses.length, parentId: "root" },
-        "col-archived": { id: "col-archived", title: "Archived", children: archivedCourses.map(c => c.id), totalChildrenCount: archivedCourses.length, parentId: "root" },
+        "col-archived":  { id: "col-archived",  title: "Archived",  children: archivedCourses.map(c => c.id),  totalChildrenCount: archivedCourses.length,  parentId: "root" },
     };
-
     filteredCourses.forEach(course => {
         kanbanDataSource[course.id] = {
-            id: course.id,
-            title: course.title,
+            id: course.id, title: course.title,
             parentId: `col-${course.status.toLowerCase()}`,
-            children: [],
-            totalChildrenCount: 0,
-            type: "card",
-            content: course,
+            children: [], totalChildrenCount: 0,
+            type: "card", content: course,
         };
     });
 
@@ -96,234 +98,171 @@ export default function CoursesAdminPage() {
                 const c: Course = data.content;
                 return (
                     <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex flex-col gap-3 w-full">
-                        <div className="flex justify-between items-start">
-                            <h4 className="font-semibold text-gray-900 leading-tight">{c.title}</h4>
-                            <span className={`text-[10px] px-2 py-1 rounded-full font-medium ${c.status === 'Published' ? 'bg-emerald-100 text-emerald-700' :
-                                c.status === 'Draft' ? 'bg-amber-100 text-amber-700' :
-                                    'bg-gray-100 text-gray-700'
-                                }`}>
+                        <div className="flex justify-between items-start gap-2">
+                            <h4 className="font-semibold text-gray-900 leading-tight text-sm">{c.title}</h4>
+                            <span className={`shrink-0 text-[10px] px-2 py-1 rounded-full font-semibold ${c.status === "Published" ? "bg-emerald-100 text-emerald-700" : c.status === "Draft" ? "bg-amber-100 text-amber-700" : "bg-gray-100 text-gray-600"}`}>
                                 {c.status}
                             </span>
                         </div>
                         {c.tags.length > 0 && (
                             <div className="flex flex-wrap gap-1">
-                                {c.tags.map(tag => (
-                                    <span key={tag} className="bg-rose-50 text-rose-600 text-[10px] px-2 py-0.5 rounded-full">{tag}</span>
-                                ))}
+                                {c.tags.map(tag => <span key={tag} className="bg-rose-50 text-rose-600 text-[10px] px-2 py-0.5 rounded-full">{tag}</span>)}
                             </div>
                         )}
-                        <div className="flex items-center gap-4 text-xs text-gray-500 mt-2">
-                            <span className="flex items-center gap-1"><Eye size={14} /> {c.views}</span>
-                            <span className="flex items-center gap-1"><BookOpen size={14} /> {c.totalLessons}</span>
-                            <span className="flex items-center gap-1"><Clock size={14} /> {c.totalDuration}</span>
+                        <div className="flex items-center gap-4 text-xs text-gray-500 mt-1">
+                            <span className="flex items-center gap-1"><BookOpen size={13} /> {c.totalLessons}</span>
+                            <span className="flex items-center gap-1"><Clock size={13} /> {c.totalDuration}</span>
                         </div>
-                        <div className="border-t border-gray-100 mt-2 pt-3 flex items-center justify-end gap-2">
-                            <button className="text-gray-400 hover:text-rose-600 transition-colors" title="Share"><Share2 size={16} /></button>
-                            <a href={`/admin/courses/${c.id}`} className="text-gray-400 hover:text-rose-600 transition-colors" title="Edit"><Edit2 size={16} /></a>
+                        <div className="border-t border-gray-100 pt-3 flex items-center justify-end">
+                            <a href={`/admin/courses/${c.id}`} className="flex items-center gap-1.5 text-xs font-semibold text-indigo-600 hover:text-indigo-800 transition-colors">
+                                <Edit2 size={13} /> Edit
+                            </a>
                         </div>
                     </div>
                 );
             },
             isDraggable: true,
         },
-        divider: {
-            render: ({ data }: any) => (
-                <div className="flex items-center my-3">
-                    <div className="flex-1 h-px bg-gray-200"></div>
-                    <span className="px-3 text-sm font-medium text-gray-400">{data.title}</span>
-                    <div className="flex-1 h-px bg-gray-200"></div>
-                </div>
-            ),
-            isDraggable: false,
-        },
         footer: {
-            render: ({ column }: any) => (
-                <button className="w-full mt-3 py-2 border-2 border-dashed border-gray-200 rounded-lg text-sm text-gray-500 hover:bg-gray-50 hover:border-gray-300 transition-colors">
-                    + Add course to {column.title}
-                </button>
-            ),
+            render: () => null,
             isDraggable: false,
         },
     };
 
     const onCardMove = (moveInfo: any) => {
-        console.log("Card moved:", moveInfo);
         const { cardId, toColumnId } = moveInfo;
-        const newStatusMatch = toColumnId?.match(/col-(.*)/);
-        if (newStatusMatch) {
-            const newStatusRaw = newStatusMatch[1];
-            const newStatus = (newStatusRaw.charAt(0).toUpperCase() + newStatusRaw.slice(1)) as CourseStatus;
-            setCourses(prev => prev.map(c => c.id === cardId ? { ...c, status: newStatus } : c));
-        }
+        const match = toColumnId?.match(/col-(.*)/);
+        if (!match) return;
+        const newStatus = (match[1].charAt(0).toUpperCase() + match[1].slice(1)) as CourseStatus;
+        setCourses(prev => prev.map(c => c.id === cardId ? { ...c, status: newStatus } : c));
+        // Persist status change
+        const numStatus = { Draft: 1, Published: 2, Archived: 3 }[newStatus];
+        fetchWithAuth(`/courses/${cardId}/`, { method: "PATCH", body: JSON.stringify({ status: numStatus }) })
+            .then(r => { if (!r.ok) toast.error("Failed to update course status"); })
+            .catch(() => toast.error("Network error while updating status"));
     };
 
     return (
         <div className="min-h-screen bg-[#f9fafb] text-[#2c2f30] p-8 font-sans">
-            {/* Header Area */}
+            {/* Header */}
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
                 <div>
                     <h1 className="text-3xl font-extrabold text-gray-900 tracking-tight">Courses</h1>
                     <p className="text-gray-500 mt-1">Manage, publish, and track your educational content.</p>
                 </div>
-
                 <div className="flex items-center gap-3">
                     {/* Search */}
                     <div className="relative">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
                         <input
                             type="text"
                             placeholder="Search courses..."
                             value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
-                            className="pl-10 pr-4 py-2 bg-white border border-gray-200 rounded-full focus:outline-none focus:ring-2 focus:ring-rose-500 w-64 text-sm"
+                            onChange={e => setSearchQuery(e.target.value)}
+                            className="pl-9 pr-4 py-2 bg-white border border-gray-200 rounded-full focus:outline-none focus:ring-2 focus:ring-rose-500 w-56 text-sm"
                         />
                     </div>
-
                     {/* View Toggle */}
                     <div className="flex bg-gray-200/50 p-1 rounded-full border border-gray-200">
-                        <button
-                            onClick={() => setView("kanban")}
-                            className={`p-1.5 rounded-full transition-colors ${view === "kanban" ? "bg-white shadow-sm text-rose-600" : "text-gray-500 hover:text-gray-700"}`}
-                            title="Kanban View"
-                        >
-                            <LayoutGrid size={18} />
-                        </button>
-                        <button
-                            onClick={() => setView("list")}
-                            className={`p-1.5 rounded-full transition-colors ${view === "list" ? "bg-white shadow-sm text-rose-600" : "text-gray-500 hover:text-gray-700"}`}
-                            title="List View"
-                        >
-                            <List size={18} />
-                        </button>
+                        <button onClick={() => setView("kanban")} className={`p-1.5 rounded-full transition-colors ${view === "kanban" ? "bg-white shadow-sm text-rose-600" : "text-gray-500 hover:text-gray-700"}`} title="Kanban"><LayoutGrid size={17} /></button>
+                        <button onClick={() => setView("list")} className={`p-1.5 rounded-full transition-colors ${view === "list" ? "bg-white shadow-sm text-rose-600" : "text-gray-500 hover:text-gray-700"}`} title="List"><List size={17} /></button>
                     </div>
-
-                    {/* Create Button */}
-                    <button
-                        onClick={() => setIsModalOpen(true)}
-                        className="flex items-center gap-2 bg-[#f43f5e] hover:bg-rose-600 text-white px-5 py-2.5 rounded-full font-medium transition-colors"
-                    >
-                        <Plus size={18} />
-                        <span>Create Course</span>
+                    {/* Create */}
+                    <button onClick={() => setIsModalOpen(true)} className="flex items-center gap-2 bg-[#f43f5e] hover:bg-rose-600 text-white px-5 py-2.5 rounded-full font-medium transition-colors text-sm">
+                        <Plus size={17} /> Create Course
                     </button>
                 </div>
             </div>
 
-            {/* Main Content Area */}
-            {view === "kanban" ? (
+            {/* Loading */}
+            {loading && (
+                <div className="flex items-center justify-center py-32 text-gray-400">
+                    <Loader2 className="animate-spin mr-3" size={28} /> Loading courses...
+                </div>
+            )}
+
+            {/* Error */}
+            {!loading && fetchError && (
+                <div className="flex flex-col items-center justify-center py-24 gap-4 text-center">
+                    <AlertCircle size={48} className="text-red-300" />
+                    <p className="text-gray-500 font-medium">{fetchError}</p>
+                    <button onClick={loadCourses} className="px-5 py-2 bg-rose-500 text-white rounded-full text-sm font-semibold hover:bg-rose-600">Retry</button>
+                </div>
+            )}
+
+            {/* Empty */}
+            {!loading && !fetchError && courses.length === 0 && (
+                <div className="flex flex-col items-center justify-center py-24 gap-4 text-gray-400 text-center">
+                    <BookOpen size={56} className="opacity-30" />
+                    <p className="font-semibold text-gray-500">No courses yet</p>
+                    <p className="text-sm">Click "Create Course" to get started.</p>
+                </div>
+            )}
+
+            {/* Kanban */}
+            {!loading && !fetchError && courses.length > 0 && view === "kanban" && (
                 <div className="overflow-x-auto pb-4">
                     <div className="min-w-fit">
-                        <Kanban
-                            dataSource={kanbanDataSource}
-                            configMap={configMap}
-                            onCardMove={onCardMove}
-                        />
+                        <Kanban dataSource={kanbanDataSource} configMap={configMap} onCardMove={onCardMove} />
                     </div>
                 </div>
-            ) : (
+            )}
+
+            {/* List */}
+            {!loading && !fetchError && courses.length > 0 && view === "list" && (
                 <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
                     <table className="w-full text-left border-collapse">
                         <thead>
-                            <tr className="bg-gray-50/50 border-b border-gray-100 text-sm text-gray-500">
-                                <th className="py-4 px-6 font-medium">Course Title</th>
-                                <th className="py-4 px-6 font-medium">Status</th>
-                                <th className="py-4 px-6 font-medium">Stats</th>
-                                <th className="py-4 px-6 font-medium text-right">Actions</th>
+                            <tr className="bg-gray-50/50 border-b border-gray-100 text-xs text-gray-500 font-bold uppercase tracking-wider">
+                                <th className="py-4 px-6">Course Title</th>
+                                <th className="py-4 px-6">Status</th>
+                                <th className="py-4 px-6">Stats</th>
+                                <th className="py-4 px-6 text-right">Actions</th>
                             </tr>
                         </thead>
                         <tbody>
-                            {filteredCourses.map((c) => (
+                            {filteredCourses.map(c => (
                                 <tr key={c.id} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
                                     <td className="py-4 px-6">
                                         <p className="font-semibold text-gray-900">{c.title}</p>
                                         <div className="flex flex-wrap gap-1 mt-1">
-                                            {c.tags.map(tag => (
-                                                <span key={tag} className="bg-gray-100 text-gray-600 text-[10px] px-2 py-0.5 rounded-full">{tag}</span>
-                                            ))}
+                                            {c.tags.map(tag => <span key={tag} className="bg-gray-100 text-gray-600 text-[10px] px-2 py-0.5 rounded-full">{tag}</span>)}
                                         </div>
                                     </td>
                                     <td className="py-4 px-6">
-                                        <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${c.status === 'Published' ? 'bg-emerald-100 text-emerald-700' :
-                                            c.status === 'Draft' ? 'bg-amber-100 text-amber-700' :
-                                                'bg-gray-100 text-gray-700'
-                                            }`}>
+                                        <span className={`text-xs px-2.5 py-1 rounded-full font-semibold ${c.status === "Published" ? "bg-emerald-100 text-emerald-700" : c.status === "Draft" ? "bg-amber-100 text-amber-700" : "bg-gray-100 text-gray-600"}`}>
                                             {c.status}
                                         </span>
                                     </td>
                                     <td className="py-4 px-6">
                                         <div className="flex gap-4 text-xs text-gray-500">
-                                            <span className="flex items-center gap-1"><Eye size={14} /> {c.views}</span>
-                                            <span className="flex items-center gap-1"><BookOpen size={14} /> {c.totalLessons}</span>
-                                            <span className="flex items-center gap-1"><Clock size={14} /> {c.totalDuration}</span>
+                                            <span className="flex items-center gap-1"><BookOpen size={13} /> {c.totalLessons} lessons</span>
+                                            <span className="flex items-center gap-1"><Clock size={13} /> {c.totalDuration}</span>
                                         </div>
                                     </td>
                                     <td className="py-4 px-6">
                                         <div className="flex items-center justify-end gap-3">
-                                            <button className="text-gray-400 hover:text-rose-600 transition-colors" title="Share"><Share2 size={18} /></button>
-                                            <a href={`/admin/courses/${c.id}`} className="text-gray-400 hover:text-rose-600 transition-colors" title="Edit"><Edit2 size={18} /></a>
+                                            <a href={`/admin/courses/${c.id}`} className="flex items-center gap-1 text-xs font-semibold text-indigo-600 hover:text-indigo-800 bg-indigo-50 px-3 py-1.5 rounded-lg transition-colors">
+                                                <Edit2 size={13} /> Edit
+                                            </a>
                                         </div>
                                     </td>
                                 </tr>
                             ))}
                             {filteredCourses.length === 0 && (
-                                <tr>
-                                    <td colSpan={4} className="py-8 text-center text-gray-500">No courses found matching "{searchQuery}"</td>
-                                </tr>
+                                <tr><td colSpan={4} className="py-10 text-center text-gray-400 text-sm">No courses match "{searchQuery}"</td></tr>
                             )}
                         </tbody>
                     </table>
                 </div>
             )}
 
-            {/* Create Course Modal */}
-            {isModalOpen && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ backgroundColor: 'rgba(0, 0, 0, 0.4)', backdropFilter: 'blur(4px)' }}>
-                    <div className="bg-white rounded-3xl w-full max-w-md shadow-2xl p-6 relative">
-                        <button
-                            onClick={() => setIsModalOpen(false)}
-                            className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 p-2 rounded-full hover:bg-gray-100 transition-colors"
-                        >
-                            <X size={20} />
-                        </button>
-
-                        <h2 className="text-2xl font-bold text-gray-900 mb-1">Create New Course</h2>
-                        <p className="text-sm text-gray-500 mb-6">Enter a title to initialize your new course draft.</p>
-
-                        <form onSubmit={handleCreateCourse}>
-                            <div className="space-y-4">
-                                <div>
-                                    <label htmlFor="courseName" className="block text-sm font-medium text-gray-700 mb-1">Course Title</label>
-                                    <input
-                                        id="courseName"
-                                        type="text"
-                                        required
-                                        autoFocus
-                                        value={newCourseName}
-                                        onChange={(e) => setNewCourseName(e.target.value)}
-                                        placeholder="e.g. Introduction to Masterpieces"
-                                        className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-500 focus:bg-white transition-colors"
-                                    />
-                                </div>
-                            </div>
-
-                            <div className="mt-8 flex justify-end gap-3">
-                                <button
-                                    type="button"
-                                    onClick={() => setIsModalOpen(false)}
-                                    className="px-5 py-2.5 text-gray-600 font-medium hover:bg-gray-100 rounded-full transition-colors"
-                                >
-                                    Cancel
-                                </button>
-                                <button
-                                    type="submit"
-                                    className="px-6 py-2.5 bg-[#f43f5e] hover:bg-rose-600 text-white font-medium rounded-full transition-colors shadow-sm"
-                                >
-                                    Create & Continue
-                                </button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            )}
+            <CreateCourseModal
+                isOpen={isModalOpen}
+                onClose={() => setIsModalOpen(false)}
+                onCourseCreated={onCourseCreated}
+                baseEditPath="/admin/courses"
+            />
         </div>
     );
 }

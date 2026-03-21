@@ -192,10 +192,10 @@ export default function MyCoursesPage() {
                                         <div className="flex gap-2 relative z-10">
                                             {course.tags.map((tag, i) => (
                                                 <span key={i} className={`px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest rounded transition-colors ${tag.includes("IN PROGRESS") ? 'bg-white text-[#F43F5E] shadow-sm' :
-                                                        tag.includes("RECOMMENDED") ? 'bg-[#E11D48] text-white shadow-sm' :
-                                                            tag.includes("NEW") ? 'bg-white text-[#F43F5E] shadow-sm' :
-                                                                tag.includes("ENROLLED") ? 'bg-white text-gray-600 shadow-sm' :
-                                                                    'bg-[#2A2A2A] text-white shadow-sm'
+                                                    tag.includes("RECOMMENDED") ? 'bg-[#E11D48] text-white shadow-sm' :
+                                                        tag.includes("NEW") ? 'bg-white text-[#F43F5E] shadow-sm' :
+                                                            tag.includes("ENROLLED") ? 'bg-white text-gray-600 shadow-sm' :
+                                                                'bg-[#2A2A2A] text-white shadow-sm'
                                                     }`}>
                                                     {tag}
                                                 </span>
@@ -249,9 +249,9 @@ export default function MyCoursesPage() {
 
                                     {/* Action Buttons based on state */}
                                     <button className={`w-full py-3.5 rounded-xl text-[15px] font-bold transition-all active:scale-[0.98] ${course.state === 'in_progress' ? 'bg-[#F43F5E] hover:bg-rose-600 text-white shadow-lg shadow-rose-200' :
-                                            course.state === 'enrolled' ? 'bg-gray-900 hover:bg-black text-white shadow-lg shadow-gray-200' :
-                                                course.state === 'guest' ? 'bg-gray-100 hover:bg-gray-200 text-gray-900' :
-                                                    course.state === 'paid' ? 'bg-white text-[#F43F5E] hover:bg-gray-50 shadow-lg' : ''
+                                        course.state === 'enrolled' ? 'bg-gray-900 hover:bg-black text-white shadow-lg shadow-gray-200' :
+                                            course.state === 'guest' ? 'bg-gray-100 hover:bg-gray-200 text-gray-900' :
+                                                course.state === 'paid' ? 'bg-white text-[#F43F5E] hover:bg-gray-50 shadow-lg' : ''
                                         }`}>
                                         {course.state === 'in_progress' ? 'Continue' :
                                             course.state === 'enrolled' ? 'Start' :

@@ -218,8 +218,8 @@ export default function AdminDashboardPage() {
                                     <h4 className="font-semibold text-gray-900 text-sm mb-1 line-clamp-1" title={course.title}>{course.title}</h4>
                                     <div className="flex items-center justify-between mb-3">
                                         <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${course.status === 'Published' ? 'bg-emerald-100 text-emerald-700' :
-                                                course.status === 'Draft' ? 'bg-amber-100 text-amber-700' :
-                                                    'bg-gray-100 text-gray-700'
+                                            course.status === 'Draft' ? 'bg-amber-100 text-amber-700' :
+                                                'bg-gray-100 text-gray-700'
                                             }`}>
                                             {course.status}
                                         </span>
