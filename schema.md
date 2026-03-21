@@ -3,7 +3,7 @@ User
 - name
 - email
 - password
-- role (INT ENUM)  -- 1(admin),2(instructor),3(student)
+- role (INT ENUM)  -- 1(admin),2(instructor),3(learner)
 - created_at
 - updatedAt
 
@@ -11,14 +11,14 @@ User
 Course
 - id (PK)
 - title
-- description
+- description 
 - created_at
 - updatedAt
 - createdBy (FK to User)
 - updatedBy (FK by user)
-- visibility (INT ENUM) -- 1(everyone),2(only enrolled students)
+- visibility (INT ENUM) -- 1(everyone),2(only invited by instrutor/admin)
 - price (nullable)
-- thumbnail (nullable)
+- thumbnail (nullable)(URL)
 - status (INT ENUM) -- 1(draft),2(published),3(archived)
 - total_lesson
 - total_duration
@@ -29,12 +29,14 @@ Lessons
 - Courseid (FK by course)
 - title
 - data: json (using the editor.js)
+- sequence: int
 
 attachment
 - id (PK)
 - lessonid (FK by lesson)
-- file_url
-- file_type (INT ENUM) -- 1(file),2(link)
+- attachment_url
+- attachment_name
+- attachment_type (INT ENUM) -- 1(file),2(link)
 
 
 Quiz
@@ -43,6 +45,8 @@ Quiz
 - title
 - description
 - data: json (using the react quiz kit)
+- createdAt
+- updatedAt
 
 Quiz Reward
 - id(PK)
@@ -66,13 +70,12 @@ Enrollment
 
 
 
-
 User Progress
 - id(PK)
 - userid(FK by user)
 - lessonid(FK by lesson)
 - status(INT ENUM) -- 1(completed),2(not completed)
-- completed_at
+- completed_at (nullable)
 - created_at
 - updated_at
 - time_spent
@@ -82,18 +85,7 @@ User Quiz Attempt
 - id(PK)
 - userid(FK by user)
 - quizid(FK by quiz)
-- status(INT ENUM) -- 1,2,3
-- completed_at
-- created_at
-- updated_at
-
-
-User Quiz Answer
-- id(PK)
-- userid(FK by user)
-- quizid(FK by quiz)
-- lessonid(FK by lesson)
-- status(INT ENUM) -- 1,2,3
+- submitted_ans data: json (using react-quiz-kit)
 - completed_at
 - created_at
 - updated_at
@@ -102,12 +94,16 @@ User Quiz Answer
 
 
 
-User Points
+
+
+User lesson Stats
 - id(PK)
 - userid(FK by user)
-- points
+- Total Points
 - created_at
 - updated_at
+- completed lesson
+-> more you can as stats data in the attribute 
 
 
 User Points History
@@ -115,11 +111,4 @@ User Points History
 - userid(FK by user)
 - points
 - created_at
-- updated_at
 
-Review
-- id
-- user_id
-- course_id
-- rating
-- comment
