@@ -28,8 +28,16 @@ export default function LoginPage() {
 
       if (res.ok) {
         const data = await res.json();
-        // Mock user details since token parsing isn't fully set up on client right now
-        login(data.access, data.refresh, { id: -1, email, name: email.split("@")[0], role: 3 });
+        
+        // Fetch real user details
+        const meRes = await fetch("http://localhost:8000/api/users/me/", {
+            headers: {
+                "Authorization": `Bearer ${data.access}`
+            }
+        });
+        const userData = await meRes.json();
+        
+        login(data.access, data.refresh, userData);
         router.push("/");
       } else {
         const errData = await res.json();

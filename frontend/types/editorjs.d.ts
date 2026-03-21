@@ -1,0 +1,9 @@
+declare module '@editorjs/embed';
+declare module '@editorjs/header';
+declare module '@editorjs/list';
+declare module '@editorjs/nested-list';
+declare module '@editorjs/warning';
+declare module '@editorjs/table';
+declare module '@editorjs/image';
+declare module '@editorjs/paragraph';
+declare module 'simple-image-editorjs';

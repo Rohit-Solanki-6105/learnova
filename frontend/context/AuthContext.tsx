@@ -43,12 +43,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const checkAuth = async () => {
     try {
       setLoading(true);
-      const res = await fetchWithAuth('/users/'); // Just to verify token is valid, ideally an info endpoint
+      const res = await fetchWithAuth('/users/me/'); 
       if (res.ok) {
-        // Need a better /me endpoint, assuming we get the data from somewhere or we decode JWT.
-        // For simplicity we will assume JWT has info or we just know they are logged in.
-        // Let's decode or fetch me. For now, we will mark them as authenticated.
-        setUser({ id: -1, email: "user@learnova", name: "User", role: 3 }); 
+        const userData = await res.json();
+        setUser(userData); 
       } else {
         logout();
       }
