@@ -1,0 +1,45 @@
+# --- Python / Django ---
+__pycache__/
+*.py[cod]
+*$py.class
+.env
+.env.local
+.env.*.local
+.venv
+venv/
+db.sqlite3
+/static/
+/media/
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pyre/
+
+# --- Frontend (Node/Next.js) ---
+frontend/node_modules/
+frontend/dist/
+frontend/build/
+frontend/.env.local
+frontend/.env.development.local
+frontend/.env.test.local
+frontend/.env.production.local
+frontend/npm-debug.log*
+frontend/yarn-debug.log*
+frontend/yarn-error.log*
+
+# --- IDEs & Editors ---
+.vscode/
+.idea/
+.agent/
+*.swp
+*.swo
+*~
+
+
+# --- Operating System ---
+.DS_Store
+Thumbs.db
+*.log
