@@ -13,11 +13,11 @@ export interface TextEditorProps {
     readOnly?: boolean;
 }
 
-export default function TextEditor({ 
-    text, 
-    setText, 
-    placeholder = "Start typing...", 
-    readOnly = false 
+export default function TextEditor({
+    text,
+    setText,
+    placeholder = "Start typing...",
+    readOnly = false
 }: TextEditorProps) {
     const [editorValue, setEditorValue] = useState<any>(null);
     const [RTE, setRTE] = useState<any>(null);
@@ -27,12 +27,12 @@ export default function TextEditor({
     // We must load it asynchronously here to avoid SSR window is not defined errors.
     useEffect(() => {
         let mounted = true;
-        
+
         import('react-rich-text-editor').then((mod) => {
             if (!mounted) return;
             const module = mod.default || mod;
             setRTE(() => module);
-            
+
             if (text) {
                 setEditorValue(module.createValueFromString(text, 'html'));
             } else {
@@ -54,7 +54,7 @@ export default function TextEditor({
         const currentHtml = editorValue.toString('html');
         // Prevent cursor jumping while typing by only resetting if strictly different
         if (text !== currentHtml && typeof text === 'string') {
-             setEditorValue(RTE.createValueFromString(text || '', 'html'));
+            setEditorValue(RTE.createValueFromString(text || '', 'html'));
         }
     }, [text, RTE]);
 
