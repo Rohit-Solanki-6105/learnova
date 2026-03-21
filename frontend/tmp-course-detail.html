@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Course Details | Learnova</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@200;400;500;700;800&amp;family=Inter:wght@300;400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              colors: {
+                "on-tertiary": "#ffffff",
+                "on-error-container": "#93000a",
+                "on-background": "#1a1c1c",
+                "error": "#ba1a1a",
+                "outline": "#926e6f",
+                "tertiary": "#5d5c5b",
+                "on-primary-fixed": "#40000c",
+                "secondary-fixed-dim": "#c8c6c6",
+                "surface-container-low": "#f3f3f3",
+                "tertiary-fixed-dim": "#c8c6c5",
+                "on-tertiary-fixed-variant": "#474746",
+                "surface-container-high": "#e8e8e8",
+                "on-surface-variant": "#5d3f40",
+                "primary": "#ba0035",
+                "surface-container": "#eeeeee",
+                "on-primary": "#ffffff",
+                "on-secondary-fixed": "#1b1c1c",
+                "surface-variant": "#e2e2e2",
+                "on-primary-container": "#fffbff",
+                "primary-fixed-dim": "#ffb3b6",
+                "on-tertiary-container": "#fffcfb",
+                "secondary-container": "#e4e2e1",
+                "surface": "#f9f9f9",
+                "on-primary-fixed-variant": "#920028",
+                "outline-variant": "#e7bcbd",
+                "inverse-surface": "#2f3131",
+                "surface-bright": "#f9f9f9",
+                "on-secondary": "#ffffff",
+                "inverse-on-surface": "#f1f1f1",
+                "surface-container-highest": "#e2e2e2",
+                "secondary": "#5f5e5e",
+                "tertiary-fixed": "#e5e2e1",
+                "secondary-fixed": "#e4e2e1",
+                "surface-container-lowest": "#ffffff",
+                "on-tertiary-fixed": "#1b1b1c",
+                "on-secondary-fixed-variant": "#474747",
+                "background": "#f9f9f9",
+                "on-surface": "#1a1c1c",
+                "primary-fixed": "#ffdada",
+                "on-secondary-container": "#656464",
+                "inverse-primary": "#ffb3b6",
+                "on-error": "#ffffff",
+                "surface-dim": "#dadada",
+                "primary-container": "#e70545",
+                "tertiary-container": "#757474",
+                "surface-tint": "#be0037",
+                "error-container": "#ffdad6"
+              },
+              fontFamily: {
+                "headline": ["Manrope"],
+                "body": ["Inter"],
+                "label": ["Inter"]
+              },
+              borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+            },
+          },
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .fill-icon {
+            font-variation-settings: 'FILL' 1;
+        }
+        body { font-family: 'Inter', sans-serif; }
+        h1, h2, h3, .font-manrope { font-family: 'Manrope', sans-serif; }
+    </style>
+</head>
+<body class="bg-surface text-on-surface min-h-screen">
+<!-- Top Navigation Bar -->
+<nav class="bg-[#f9f9f9] dark:bg-[#1a1c1c] docked full-width top-0 sticky z-50">
+<div class="flex items-center justify-between px-8 py-4 max-w-[1440px] mx-auto">
+<div class="flex items-center gap-12">
+<span class="text-2xl font-black tracking-tighter text-[#1a1c1c] dark:text-[#f6f6f6]">Learnova</span>
+<div class="hidden md:flex items-center gap-8 font-manrope text-sm font-medium tracking-wide">
+<a class="text-[#5f5e5e] dark:text-[#e8e8e8] hover:text-[#1a1c1c] transition-colors" href="#">Courses</a>
+<a class="text-[#f3184c] border-b-2 border-[#f3184c] pb-1 font-bold" href="#">My Learning</a>
+</div>
+</div>
+<div class="flex items-center gap-6">
+<div class="hidden md:flex items-center bg-surface-container-high rounded-full px-4 py-2 w-64">
+<span class="material-symbols-outlined text-secondary text-sm mr-2" data-icon="search">search</span>
+<input class="bg-transparent border-none text-sm focus:ring-0 w-full placeholder:text-secondary" placeholder="Search courses..." type="text"/>
+</div>
+<button class="relative hover:opacity-80 transition-opacity duration-200">
+<span class="material-symbols-outlined text-on-surface" data-icon="notifications">notifications</span>
+<span class="absolute top-0 right-0 w-2 h-2 bg-primary rounded-full"></span>
+</button>
+<div class="w-10 h-10 rounded-full overflow-hidden border-2 border-white shadow-sm">
+<img alt="User Avatar" data-alt="User profile portrait close up" src="https://lh3.googleusercontent.com/aida-public/AB6AXuC1AxIHL6ga2_TIIz71kw1EuDdtvVaFCZWsl08eIaWwZLeF8IgxSZr0aXzywVe9-7pszBDTrWqsh3j7pmgEw9ACvWuD9ByxxKFLM3-lcsvGrZqC_Ehe9z40MxoA8EiEGH-PwbUjSlKRuM7U8OSbxJpYmP56gvcZVX3zExmeZuHWZD7aTAMTW1I2le8GT_vLJU3y4Ft6dh45aynGhHPtxu3L8DIxZkUSKA5NHtDDIKvH5QoTmdmTN26m5gqlL641OegAW4j7SDPklaD0"/>
+</div>
+</div>
+</div>
+<div class="bg-[#e8e8e8] dark:bg-[#303030] h-[1px] w-full"></div>
+</nav>
+<main class="max-w-[1440px] mx-auto px-8 py-12 flex flex-col lg:flex-row gap-12">
+<!-- Left Column (70%) -->
+<div class="w-full lg:w-[70%]">
+<!-- Breadcrumbs -->
+<nav class="flex text-xs font-medium tracking-widest uppercase text-secondary mb-6 gap-2 items-center">
+<span>Courses</span>
+<span class="material-symbols-outlined text-[10px]" data-icon="chevron_right">chevron_right</span>
+<span>Design</span>
+<span class="material-symbols-outlined text-[10px]" data-icon="chevron_right">chevron_right</span>
+<span class="text-on-surface">UI/UX Professional</span>
+</nav>
+<!-- Hero Section -->
+<header class="mb-12">
+<h1 class="text-5xl lg:text-7xl font-extrabold tracking-tight leading-tight mb-8">
+                    Mastering Advanced <br/>
+<span class="text-[#f3184c]">Interface Systems</span>
+</h1>
+<div class="flex flex-wrap items-center gap-8 text-sm">
+<div class="flex items-center gap-3">
+<img alt="Instructor" class="w-10 h-10 rounded-full object-cover" data-alt="Male instructor portrait professional profile" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCTKOzyfXsqq4df9zMI47z2qbYNo2SBG9Szov_vqvZoisTPmzg9M87FqOWI1ZvTA4yx-x-0mwOixzRUcAK7OqAyboe74WaL0Z7-xxUL0c4daOEbUYEAaMtwabD6ymaXsOed96F-h8laSB_rrH_7G24vrxes5wBZYpBvoWi-fG-YkB8N135QA2R46UaWhHrKOOR5Vy3QWlz0Zc8uRLdbUHGcg-BHdKtz02nuJdd7sWKwwB0UIVqZdfiWobnNZv64seIMdOiM6iWtbWeA"/>
+<div>
+<p class="text-secondary text-[10px] uppercase font-bold tracking-widest">Instructor</p>
+<p class="font-semibold">Julian Sterling</p>
+</div>
+</div>
+<div class="h-8 w-[1px] bg-surface-container-high hidden sm:block"></div>
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-primary" data-icon="schedule">schedule</span>
+<div>
+<p class="text-secondary text-[10px] uppercase font-bold tracking-widest">Duration</p>
+<p class="font-semibold">12h 45m</p>
+</div>
+</div>
+<div class="h-8 w-[1px] bg-surface-container-high hidden sm:block"></div>
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-primary" data-icon="bar_chart">bar_chart</span>
+<div>
+<p class="text-secondary text-[10px] uppercase font-bold tracking-widest">Level</p>
+<p class="font-semibold">Advanced</p>
+</div>
+</div>
+</div>
+</header>
+<!-- Progress Card -->
+<section class="bg-surface-container-lowest rounded-full py-6 px-10 shadow-[0_10px_30px_rgba(30,30,30,0.04)] mb-12 flex flex-col md:flex-row items-center justify-between gap-8 border border-white/50">
+<div class="flex-1 w-full">
+<div class="flex justify-between items-end mb-3">
+<span class="text-[10px] uppercase font-black tracking-widest text-primary">Current Journey</span>
+<span class="font-manrope font-bold text-xl">65% <span class="text-sm font-normal text-secondary ml-1">Overall Progress</span></span>
+</div>
+<div class="h-3 w-full bg-surface-container-high rounded-full overflow-hidden">
+<div class="h-full bg-[#f3184c] rounded-full w-[65%] shadow-[0_0_15px_rgba(243,24,76,0.3)]"></div>
+</div>
+</div>
+<div class="text-right whitespace-nowrap hidden md:block border-l border-surface-container-high pl-8">
+<p class="text-secondary text-sm">Lessons: <span class="font-bold text-on-surface">48</span></p>
+<p class="text-secondary text-sm">Completed: <span class="font-bold text-on-surface">31</span></p>
+<p class="text-secondary text-[10px] font-bold mt-1 text-[#f3184c]">17 Remaining</p>
+</div>
+</section>
+<!-- Content Tabs -->
+<div class="flex gap-10 border-b border-surface-container-high mb-10 overflow-x-auto">
+<button class="pb-4 text-sm font-bold border-b-2 border-primary text-on-surface whitespace-nowrap">Overview</button>
+<button class="pb-4 text-sm font-semibold text-secondary hover:text-on-surface whitespace-nowrap transition-colors">Ratings &amp; Reviews</button>
+<button class="pb-4 text-sm font-semibold text-secondary hover:text-on-surface whitespace-nowrap transition-colors">Resources</button>
+</div>
+<!-- Course Content -->
+<section>
+<div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
+<div class="flex items-center gap-4">
+<h2 class="text-2xl font-bold">Course Content</h2>
+<span class="bg-surface-container-highest px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-tight">48 lessons total</span>
+</div>
+<div class="relative w-full md:w-72">
+<span class="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-secondary text-lg" data-icon="search">search</span>
+<input class="w-full bg-surface-container-low border-none rounded-full py-2.5 pl-11 pr-4 text-sm focus:ring-1 focus:ring-primary/20" placeholder="Search lesson by name..." type="text"/>
+</div>
+</div>
+<!-- Module Accordion -->
+<div class="space-y-4">
+<div class="bg-surface-container-lowest rounded-xl overflow-hidden shadow-sm">
+<div class="flex items-center justify-between p-6 cursor-pointer hover:bg-surface-container-low/50 transition-colors">
+<div class="flex items-center gap-5">
+<span class="w-8 h-8 flex items-center justify-center bg-primary text-white rounded-lg text-xs font-bold">01</span>
+<h3 class="font-bold text-lg">Foundations of Systematic Design</h3>
+</div>
+<span class="material-symbols-outlined" data-icon="expand_more">expand_more</span>
+</div>
+<div class="px-6 pb-6 pt-2 space-y-1">
+<!-- Lesson 1 -->
+<div class="flex items-center justify-between py-4 px-4 hover:bg-surface-container-low rounded-xl transition-all group">
+<div class="flex items-center gap-4">
+<span class="material-symbols-outlined text-primary fill-icon" data-icon="check_circle" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+<span class="text-sm font-medium text-on-surface">The Anatomy of a Design Token</span>
+</div>
+<div class="flex items-center gap-4">
+<span class="text-xs text-secondary font-mono tracking-tighter">12:45</span>
+<span class="material-symbols-outlined text-secondary group-hover:text-primary transition-colors cursor-pointer" data-icon="play_circle">play_circle</span>
+</div>
+</div>
+<!-- Lesson 2 -->
+<div class="flex items-center justify-between py-4 px-4 hover:bg-surface-container-low rounded-xl transition-all group">
+<div class="flex items-center gap-4">
+<span class="material-symbols-outlined text-surface-container-highest" data-icon="radio_button_unchecked">radio_button_unchecked</span>
+<span class="text-sm font-medium text-on-surface">Atomic Methodology in Practice</span>
+</div>
+<div class="flex items-center gap-4">
+<span class="text-xs text-secondary font-mono tracking-tighter">18:20</span>
+<span class="material-symbols-outlined text-secondary group-hover:text-primary transition-colors cursor-pointer" data-icon="play_circle">play_circle</span>
+</div>
+</div>
+<!-- Lesson 3 -->
+<div class="flex items-center justify-between py-4 px-4 bg-primary/5 rounded-xl border border-primary/10 transition-all group">
+<div class="flex items-center gap-4">
+<span class="material-symbols-outlined text-primary" data-icon="radio_button_checked">radio_button_checked</span>
+<span class="text-sm font-bold text-on-surface">Naming Conventions and Semantics</span>
+</div>
+<div class="flex items-center gap-4">
+<span class="text-[10px] font-black uppercase text-primary tracking-widest mr-2">In Progress</span>
+<span class="text-xs text-secondary font-mono tracking-tighter">24:10</span>
+<span class="material-symbols-outlined text-primary cursor-pointer" data-icon="play_circle" style="font-variation-settings: 'FILL' 1;">play_circle</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+</section>
+</div>
+<!-- Right Column (30%) - Sticky Sidebar -->
+<aside class="w-full lg:w-[30%] space-y-8">
+<div class="sticky top-24 space-y-8">
+<!-- Video Preview Card -->
+<div class="relative group rounded-2xl overflow-hidden aspect-video shadow-2xl">
+<img alt="Video Preview" class="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all duration-700" data-alt="Close up of a computer screen showing UI design software" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBUoWqD1oC4-mrfrEeyd4gQlEpOSzFMdlNfLonl49rg7N4lIOeiC50FI0ZLcsko5pbbliWvcQXVtY5AYagEapItTlfQlxLHacklbZacx3M6I9T--eHvLGQl1BCjhsxVan56FIQzg62W9u5Q_PDpeMtdGsCX91a8IdJ_C_CyRanxj-lQ_zxXBbwaaUN1w9ch6AEaxKE07Y2x3lW0wcVSpEsPE8K-PdYMQZzetoGMG9Wf-oLgWzMpz4czTzbX27T1myXwEwlB_pz7RQG6"/>
+<div class="absolute inset-0 bg-green-900/10 mix-blend-multiply transition-opacity group-hover:opacity-0"></div>
+<div class="absolute inset-0 flex items-center justify-center">
+<button class="w-16 h-16 bg-[#f3184c] text-white rounded-full flex items-center justify-center shadow-2xl scale-100 hover:scale-110 transition-transform">
+<span class="material-symbols-outlined text-3xl fill-icon" data-icon="play_arrow" style="font-variation-settings: 'FILL' 1;">play_arrow</span>
+</button>
+</div>
+<div class="absolute bottom-4 left-4 right-4 bg-white/80 backdrop-blur-md rounded-xl p-3 flex items-center gap-3">
+<span class="material-symbols-outlined text-primary" data-icon="visibility">visibility</span>
+<span class="text-[10px] font-bold uppercase tracking-widest">Preview this course</span>
+</div>
+</div>
+<!-- Action Button -->
+<button class="w-full bg-[#f3184c] text-white py-5 rounded-full font-bold text-lg shadow-[0_15px_35px_rgba(243,24,76,0.25)] hover:shadow-[0_20px_45px_rgba(243,24,76,0.35)] transition-all active:scale-95">
+                    Continue Learning
+                </button>
+<!-- Feature List -->
+<div class="bg-surface-container-lowest p-8 rounded-2xl shadow-sm space-y-6">
+<h4 class="text-xs uppercase font-black tracking-[0.2em] text-secondary">Course Features</h4>
+<ul class="space-y-4">
+<li class="flex items-center gap-4 text-sm font-medium">
+<span class="material-symbols-outlined text-primary" data-icon="menu_book">menu_book</span>
+                            48 Lessons
+                        </li>
+<li class="flex items-center gap-4 text-sm font-medium">
+<span class="material-symbols-outlined text-primary" data-icon="folder_open">folder_open</span>
+                            12 Downloadable Resources
+                        </li>
+<li class="flex items-center gap-4 text-sm font-medium">
+<span class="material-symbols-outlined text-primary" data-icon="workspace_premium">workspace_premium</span>
+                            Professional Certificate
+                        </li>
+<li class="flex items-center gap-4 text-sm font-medium">
+<span class="material-symbols-outlined text-primary" data-icon="all_inclusive">all_inclusive</span>
+                            Lifetime Access
+                        </li>
+</ul>
+</div>
+<!-- Feedback Card -->
+<div class="bg-[#1e1e1e] text-white p-8 rounded-2xl shadow-2xl">
+<div class="flex items-start justify-between mb-8">
+<div>
+<p class="text-[10px] uppercase font-bold tracking-[0.2em] text-secondary mb-2">Student Feedback</p>
+<h4 class="text-6xl font-black text-[#f3184c]">4.9</h4>
+</div>
+<div class="flex flex-col items-end gap-1">
+<div class="flex gap-1 text-[#f3184c]">
+<span class="material-symbols-outlined fill-icon text-sm" data-icon="star" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="material-symbols-outlined fill-icon text-sm" data-icon="star" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="material-symbols-outlined fill-icon text-sm" data-icon="star" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="material-symbols-outlined fill-icon text-sm" data-icon="star" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="material-symbols-outlined fill-icon text-sm" data-icon="star" style="font-variation-settings: 'FILL' 1;">star</span>
+</div>
+<span class="text-xs text-secondary">Based on 1.2k reviews</span>
+</div>
+</div>
+<div class="space-y-3">
+<div class="flex items-center gap-3">
+<span class="text-[10px] font-mono text-secondary w-2">5</span>
+<div class="flex-1 h-1.5 bg-secondary/20 rounded-full overflow-hidden">
+<div class="h-full bg-[#f3184c] w-[92%]"></div>
+</div>
+</div>
+<div class="flex items-center gap-3">
+<span class="text-[10px] font-mono text-secondary w-2">4</span>
+<div class="flex-1 h-1.5 bg-secondary/20 rounded-full overflow-hidden">
+<div class="h-full bg-secondary/40 w-[6%]"></div>
+</div>
+</div>
+<div class="flex items-center gap-3">
+<span class="text-[10px] font-mono text-secondary w-2">3</span>
+<div class="flex-1 h-1.5 bg-secondary/20 rounded-full overflow-hidden">
+<div class="h-full bg-secondary/40 w-[2%]"></div>
+</div>
+</div>
+</div>
+</div>
+<!-- Recent Reviews -->
+<div class="bg-surface-container-lowest p-8 rounded-2xl shadow-sm">
+<h4 class="text-xs uppercase font-black tracking-[0.2em] text-secondary mb-6">Recent Reviews</h4>
+<div class="space-y-6 mb-8">
+<div class="space-y-3">
+<div class="flex items-center gap-2">
+<img alt="Reviewer" class="w-6 h-6 rounded-full" data-alt="Young female student profile picture" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBiIG8m6mT3yzl7tAgcMQBeRihx91eRP0RcFkl8v-hAlJlJY8JB7RKybI0NAxs6VxdgoxoTYT984T4lRWosIOZylm0orHEi8Og6GjOb9PiO68Hx9qWeIUeUds52HTXkK-mZbGeIUwpdb-IThEy1fxIZglSXP_nBsN5tgJFAZGLvQY6FEhxPaqULgSWAKY087qkp3d4Ov0U6dISqHhqjAYE7NQwMy2J4KhP2VrZCOdQnTvY2tl9hoW9gOmn3IPmwdLPov_QUKT_wJFWz"/>
+<div class="flex text-[#f3184c]">
+<span class="material-symbols-outlined fill-icon text-[10px]" data-icon="star" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="material-symbols-outlined fill-icon text-[10px]" data-icon="star" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="material-symbols-outlined fill-icon text-[10px]" data-icon="star" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="material-symbols-outlined fill-icon text-[10px]" data-icon="star" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="material-symbols-outlined fill-icon text-[10px]" data-icon="star" style="font-variation-settings: 'FILL' 1;">star</span>
+</div>
+</div>
+<p class="text-xs text-secondary leading-relaxed">The modular approach to design systems here is absolute genius. Highly recommended.</p>
+</div>
+<div class="space-y-3">
+<div class="flex items-center gap-2">
+<img alt="Reviewer" class="w-6 h-6 rounded-full" data-alt="Male student profile picture smiling" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAqLGf2aCZj0MyyNLPDWaSFwX_m7vxR2MlrHf3EUbmEkZP6KX0DFy4RksQy0TD4U1CUVtDh_EVq482wdTVZEt9A4cSh-_smx07D-WSv8GgDXI9ivtDVT5BRt7w1AX-o7lRUpesHDf5SPHSz07W4GAZz4m7Ox_ghwscoq5olpzQvnKjcCgNuR0f7xyp9DyxdAei4xDZ5xGwVcuglqA8Lmfk4HVwHEGNOl3J_LVpKO_9CvpFq33FUq9BMJTow4IP59MQBT5Y5cR0R6xSd"/>
+<div class="flex text-[#f3184c]">
+<span class="material-symbols-outlined fill-icon text-[10px]" data-icon="star" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="material-symbols-outlined fill-icon text-[10px]" data-icon="star" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="material-symbols-outlined fill-icon text-[10px]" data-icon="star" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="material-symbols-outlined fill-icon text-[10px]" data-icon="star" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="material-symbols-outlined fill-icon text-[10px]" data-icon="star" style="font-variation-settings: 'FILL' 1;">star</span>
+</div>
+</div>
+<p class="text-xs text-secondary leading-relaxed">Changed the way I handle handovers with developers. Brilliant course structure.</p>
+</div>
+</div>
+<button class="w-full border-2 border-[#f3184c] text-[#f3184c] py-3 rounded-full font-bold text-xs uppercase tracking-widest hover:bg-[#f3184c]/5 transition-colors">
+                        Add Review
+                    </button>
+</div>
+</div>
+</aside>
+</main>
+<footer class="mt-20 border-t border-surface-container-high py-12 bg-white">
+<div class="max-w-[1440px] mx-auto px-8 flex flex-col md:flex-row justify-between items-center gap-8">
+<span class="text-xl font-black tracking-tighter text-[#1a1c1c]">Learnova</span>
+<p class="text-sm text-secondary">© 2024 Academic Atelier. All rights reserved.</p>
+<div class="flex gap-8 text-sm font-medium text-secondary">
+<a class="hover:text-primary transition-colors" href="#">Privacy</a>
+<a class="hover:text-primary transition-colors" href="#">Terms</a>
+<a class="hover:text-primary transition-colors" href="#">Support</a>
+</div>
+</div>
+</footer>
+</body></html>

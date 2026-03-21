@@ -145,7 +145,7 @@ function renderBlock(block: any, idx: number): React.ReactNode {
 }
 
 // ─── Read-only viewer ─────────────────────────────────────────────────────────
-function BlocksViewer({ data }: { data: any }) {
+export function BlocksViewer({ data }: { data: any }) {
     const blocks: any[] = data?.blocks ?? [];
 
     if (blocks.length === 0) {
