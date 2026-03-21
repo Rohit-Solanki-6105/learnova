@@ -1,10 +1,6 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
-import dynamic from 'next/dynamic';
-
-// Dynamically import the quiz player to avoid Next.js Server Side Rendering (SSR) issues
-const QuizPlayer = dynamic(() => import('react-quiz-component').then(mod => mod.default), { ssr: false });
 
 export interface QuizData {
   quizTitle: string;
@@ -16,7 +12,7 @@ export interface QuizComponentProps {
   status: 'editing' | 'attempting' | 'viewing';
   data?: QuizData;
   setData?: (data: QuizData) => void;
-  onComplete?: (result: any) => void;
+  onComplete?: (result: { correctPoints: number, totalPoints: number }) => void;
 }
 
 const DEFAULT_QUIZ: QuizData = {
@@ -25,10 +21,164 @@ const DEFAULT_QUIZ: QuizData = {
   questions: []
 };
 
+// ------------------------------------------------------------------------------------------------
+// Native Quiz Player (Replaces external buggy React libraries and resolves React 19 hook crashes)
+// ------------------------------------------------------------------------------------------------
+const QuizPlayer = ({ quiz, onComplete }: { quiz: QuizData, onComplete?: (r: any) => void }) => {
+    const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
+    const [selectedAnswer, setSelectedAnswer] = useState<any>(null);
+    const [isAnswered, setIsAnswered] = useState(false);
+    const [score, setScore] = useState(0);
+    const [showResult, setShowResult] = useState(false);
+
+    const question = quiz.questions[currentQuestionIndex];
+
+    const handleAnswerSubmit = () => {
+        if (selectedAnswer === null) return;
+        
+        const isCorrect = String(selectedAnswer) === String(question.correctAnswer);
+        if (isCorrect) setScore(s => s + 1);
+        
+        setIsAnswered(true);
+    };
+
+    const handleNext = () => {
+        if (currentQuestionIndex + 1 < quiz.questions.length) {
+            setCurrentQuestionIndex(i => i + 1);
+            setSelectedAnswer(null);
+            setIsAnswered(false);
+        } else {
+            setShowResult(true);
+            if (onComplete) onComplete({ correctPoints: score, totalPoints: quiz.questions.length });
+        }
+    };
+
+    if (!question) return null;
+
+    if (showResult) {
+        return (
+            <div className="text-center p-12 bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-gray-200 dark:border-slate-800">
+                <div className="w-20 h-20 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center mx-auto mb-6">
+                    <svg className="w-10 h-10 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7"/></svg>
+                </div>
+                <h2 className="text-3xl font-black mb-2 text-gray-900 dark:text-white">Quiz Completed!</h2>
+                <div className="text-6xl font-black text-indigo-600 dark:text-indigo-400 my-6">{score} <span className="text-2xl text-gray-400">/ {quiz.questions.length}</span></div>
+                <p className="text-gray-500 font-medium">You have completed the assessment for <b>{quiz.quizTitle}</b>.</p>
+            </div>
+        );
+    }
+
+    return (
+        <div className="max-w-3xl mx-auto w-full">
+            <div className="mb-6 px-2">
+                <h2 className="text-2xl font-bold text-gray-900 dark:text-white">{quiz.quizTitle}</h2>
+                <p className="text-gray-500 mt-1">{quiz.quizSynopsis}</p>
+            </div>
+            
+            <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-gray-200 dark:border-slate-800 p-6 md:p-8">
+                <div className="flex justify-between items-center mb-8">
+                    <span className="text-xs font-black text-indigo-500 bg-indigo-50 dark:bg-indigo-900/30 px-3 py-1.5 rounded-lg uppercase tracking-wider">
+                        Question {currentQuestionIndex + 1} of {quiz.questions.length}
+                    </span>
+                    <span className="text-xs font-bold text-gray-400">Current Score: {score}</span>
+                </div>
+                
+                <h3 className="text-xl md:text-2xl font-bold text-gray-900 dark:text-white mb-8 leading-relaxed">
+                    {question.question}
+                </h3>
+
+                <div className="space-y-4 mb-8">
+                    {question.answers.map((ans: string, i: number) => {
+                        const answerIndex = String(i + 1);
+                        const isSelected = selectedAnswer === answerIndex;
+                        const isActuallyCorrect = String(question.correctAnswer) === answerIndex;
+                        
+                        let btnClass = "w-full text-left p-4 rounded-xl border-2 transition-all font-medium text-sm md:text-base ";
+                        
+                        if (!isAnswered) {
+                            btnClass += isSelected 
+                                ? "border-indigo-500 bg-indigo-50/50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-300 shadow-sm"
+                                : "border-gray-100 dark:border-slate-800 hover:border-indigo-200 dark:hover:border-indigo-800 bg-gray-50/50 dark:bg-slate-950 text-gray-700 dark:text-gray-300 hover:bg-white dark:hover:bg-slate-900";
+                        } else {
+                            if (isActuallyCorrect) {
+                                btnClass += "border-green-500 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300";
+                            } else if (isSelected && !isActuallyCorrect) {
+                                btnClass += "border-red-500 bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300";
+                            } else {
+                                btnClass += "border-gray-100 dark:border-slate-800 bg-gray-50/50 dark:bg-slate-950 text-gray-400 dark:text-gray-600 opacity-50";
+                            }
+                        }
+
+                        return (
+                            <button 
+                                key={i}
+                                disabled={isAnswered}
+                                onClick={() => setSelectedAnswer(answerIndex)}
+                                className={btnClass}
+                            >
+                                <div className="flex items-center gap-4">
+                                    <span className={`flex flex-shrink-0 items-center justify-center w-8 h-8 rounded-lg font-bold text-sm ${
+                                        isAnswered 
+                                            ? (isActuallyCorrect ? 'bg-green-200 text-green-800' : (isSelected ? 'bg-red-200 text-red-800' : 'bg-gray-200 text-gray-500'))
+                                            : (isSelected ? 'bg-indigo-600 text-white' : 'bg-gray-200 dark:bg-slate-800 text-gray-600 dark:text-gray-400')
+                                    }`}>
+                                        {['A', 'B', 'C', 'D'][i] || (i+1)}
+                                    </span>
+                                    {ans}
+                                </div>
+                            </button>
+                        );
+                    })}
+                </div>
+
+                {isAnswered && (
+                    <div className={`p-6 rounded-xl border mb-8 animate-in fade-in slide-in-from-bottom-2 duration-300 ${
+                        String(selectedAnswer) === String(question.correctAnswer)
+                            ? "bg-green-50 border-green-200 dark:bg-green-900/10 dark:border-green-800/50"
+                            : "bg-red-50 border-red-200 dark:bg-red-900/10 dark:border-red-800/50"
+                    }`}>
+                        <h4 className={`text-lg font-bold mb-2 ${
+                            String(selectedAnswer) === String(question.correctAnswer) ? "text-green-800 dark:text-green-400" : "text-red-800 dark:text-red-400"
+                        }`}>
+                            {String(selectedAnswer) === String(question.correctAnswer) ? question.messageForCorrectAnswer : question.messageForIncorrectAnswer}
+                        </h4>
+                        <p className="text-gray-700 dark:text-gray-300 leading-relaxed text-sm">
+                            {question.explanation}
+                        </p>
+                    </div>
+                )}
+
+                <div className="flex justify-end border-t border-gray-100 dark:border-slate-800 pt-6">
+                    {!isAnswered ? (
+                        <button 
+                            disabled={selectedAnswer === null}
+                            onClick={handleAnswerSubmit}
+                            className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-8 rounded-xl disabled:opacity-50 disabled:cursor-not-allowed shadow-md transition-all active:scale-95"
+                        >
+                            Submit Answer
+                        </button>
+                    ) : (
+                        <button 
+                            onClick={handleNext}
+                            className="bg-gray-900 hover:bg-black dark:bg-white dark:hover:bg-gray-200 dark:text-black text-white font-bold py-3 px-8 rounded-xl shadow-md transition-all flex items-center gap-2 active:scale-95"
+                        >
+                            {currentQuestionIndex + 1 < quiz.questions.length ? 'Next Question' : 'View Results'}
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M9 5l7 7-7 7"/></svg>
+                        </button>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+};
+
+// ------------------------------------------------------------------------------------------------
+// Main Wrapper Form Tool
+// ------------------------------------------------------------------------------------------------
+
 export default function LearnovaQuiz({ status, data, setData, onComplete }: QuizComponentProps) {
   const [internalData, setInternalData] = useState<QuizData>(data || DEFAULT_QUIZ);
 
-  // Sync internal data if external data changes (e.g. loaded from API)
   useEffect(() => {
       if (data && Object.keys(data).length > 0) {
           setInternalData(data);
@@ -81,18 +231,13 @@ export default function LearnovaQuiz({ status, data, setData, onComplete }: Quiz
   };
 
   const handleCorrectAnswerChange = (qIndex: number, val: string) => {
-    // Basic parser for "[1, 2]" style strings if they switch to multiple
     let parsedVal: any = val;
     if (val.startsWith('[') && val.endsWith(']')) {
-        try {
-            parsedVal = JSON.parse(val);
-        } catch(e) {}
+        try { parsedVal = JSON.parse(val); } catch(e) {}
     }
     handleQuestionChange(qIndex, 'correctAnswer', parsedVal);
   }
 
-  // ----------------------------------------------------
-  // ATTEMPTING MODE (Learners taking the quiz)
   // ----------------------------------------------------
   if (status === 'attempting' || status === 'viewing') {
     if (!internalData || !internalData.questions || internalData.questions.length === 0) {
@@ -103,23 +248,12 @@ export default function LearnovaQuiz({ status, data, setData, onComplete }: Quiz
         );
     }
     return (
-      <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-gray-200 dark:border-slate-800 p-2 md:p-6 w-full overflow-hidden">
-        {/* Key fix: react-quiz-component often acts strangely if unmounted, so we wrap it securely */}
-        <div className="react-quiz-container w-full max-w-full">
-            <QuizPlayer 
-                quiz={internalData} 
-                shuffle={false} 
-                showInstantFeedback={true} 
-                continueTillCorrect={false} 
-                onComplete={onComplete} 
-            />
-        </div>
+      <div className="w-full">
+         <QuizPlayer quiz={internalData} onComplete={onComplete} />
       </div>
     );
   }
 
-  // ----------------------------------------------------
-  // EDITING MODE (Instructors building the Quiz)
   // ----------------------------------------------------
   return (
     <div className="w-full bg-white dark:bg-slate-950 rounded-2xl shadow-sm border border-gray-200 dark:border-slate-800 flex flex-col font-sans">
@@ -134,7 +268,6 @@ export default function LearnovaQuiz({ status, data, setData, onComplete }: Quiz
       
       <div className="p-6 md:p-8 space-y-8">
         
-        {/* Quiz Metadata Config configures global settings */}
         <div className="space-y-4 bg-gray-50 dark:bg-slate-900 p-6 rounded-xl border border-gray-100 dark:border-slate-800">
             <div>
                 <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">Interactive Quiz Title</label>
@@ -155,7 +288,6 @@ export default function LearnovaQuiz({ status, data, setData, onComplete }: Quiz
             </div>
         </div>
 
-        {/* Dynamic Questions List */}
         <div className="space-y-6">
             <div className="flex justify-between items-center mb-2">
                 <h3 className="text-lg font-bold text-gray-900 dark:text-white">Curriculum Questions</h3>
