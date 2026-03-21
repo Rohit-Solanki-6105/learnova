@@ -5,7 +5,7 @@ import {
     Plus, Eye, EyeOff, Trash2, ArrowLeft, Edit2, X, Save,
     GripVertical, CheckCircle2, Archive, Globe, Lock,
     BookOpen, HelpCircle, Loader2, ImageIcon, ChevronDown,
-    AlertCircle
+    AlertCircle, Users
 } from "lucide-react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
@@ -26,6 +26,7 @@ interface LessonData {
     description?: string;   // stored inside data.description
     data: any;              // EditorJS JSON
     course: number;
+    duration: number;       // minutes
 }
 
 interface QuizFromApi {
@@ -35,6 +36,7 @@ interface QuizFromApi {
     sequence: number;
     data: QuizData | null;
     course: number;
+    duration: number;       // minutes
 }
 
 interface ContentItem {
@@ -61,6 +63,7 @@ interface CourseDetail {
     status: 1 | 2 | 3;
     visibility: 1 | 2;
     responsible: number | null;
+    price: string | null;
     tags: Tag[];
     lessons: LessonData[];
     quizzes: QuizFromApi[];
@@ -98,9 +101,12 @@ export default function CourseEditorWrapper({ courseId, role }: CourseEditorProp
     const [visibility, setVisibility] = useState<1 | 2>(1);
     const [responsibleId, setResponsibleId] = useState<number | null>(null);
     const [selectedTags, setSelectedTags] = useState<Tag[]>([]);
+    const [price, setPrice] = useState<string>("");
+    const [totalDuration, setTotalDuration] = useState<number>(0);
+    const [totalLesson, setTotalLesson] = useState<number>(0);
 
     const [instructors, setInstructors] = useState<Instructor[]>([]);
-    const [activeTab, setActiveTab] = useState<"content" | "description" | "settings">("content");
+    const [activeTab, setActiveTab] = useState<"content" | "description" | "overview">("content");
     const [contentItems, setContentItems] = useState<ContentItem[]>([]);
 
     const [editingLesson, setEditingLesson] = useState<LessonData | null>(null);
@@ -126,6 +132,9 @@ export default function CourseEditorWrapper({ courseId, role }: CourseEditorProp
             setVisibility(data.visibility);
             setResponsibleId(data.responsible);
             setSelectedTags(data.tags ?? []);
+            setPrice(data.price ? String(data.price) : "");
+            setTotalDuration(data.total_duration ?? 0);
+            setTotalLesson(data.total_lesson ?? 0);
 
             const merged: ContentItem[] = [
                 ...data.lessons.map(l => ({ kind: "lesson" as const, id: l.id, title: l.title, sequence: l.sequence })),
@@ -176,6 +185,7 @@ export default function CourseEditorWrapper({ courseId, role }: CourseEditorProp
     };
 
     const handleSaveDetails = async () => {
+        const priceVal = price.trim() === '' || parseFloat(price) === 0 ? null : parseFloat(price).toFixed(2);
         const ok = await saveCourse({
             title: courseTitle,
             description: courseDescription,
@@ -183,6 +193,7 @@ export default function CourseEditorWrapper({ courseId, role }: CourseEditorProp
             visibility,
             responsible: responsibleId,
             tag_ids: selectedTags.map(t => t.id),
+            price: priceVal,
         });
         if (ok) toast.success("Course details saved!");
     };
@@ -365,6 +376,13 @@ export default function CourseEditorWrapper({ courseId, role }: CourseEditorProp
 
                     {/* Status & save */}
                     <div className="flex flex-wrap items-center gap-3">
+                        <Link
+                            href={`/${role === "admin" ? "admin" : "instructor"}/courses/${courseId}/enrolled`}
+                            className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold bg-gray-100 hover:bg-gray-200 text-gray-700 transition-colors"
+                        >
+                            <Users size={15} />
+                            Enrolled · {totalLesson} lessons
+                        </Link>
                         {status !== 3 && (
                             <button
                                 onClick={() => handleStatusChange(status === 2 ? 1 : 2)}
@@ -429,6 +447,22 @@ export default function CourseEditorWrapper({ courseId, role }: CourseEditorProp
                                 <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={16} />
                             </div>
                         </div>
+                        <div>
+                            <label className="block text-xs font-bold text-gray-400 mb-2 tracking-widest uppercase">Price (USD)</label>
+                            <div className="relative max-w-xs">
+                                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-bold text-sm">$</span>
+                                <input
+                                    type="number"
+                                    min={0}
+                                    step={0.01}
+                                    value={price}
+                                    onChange={e => setPrice(e.target.value)}
+                                    placeholder="0.00"
+                                    className="w-full pl-8 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm font-semibold"
+                                />
+                            </div>
+                            <p className="text-xs text-gray-400 mt-1">Leave empty or 0 for free access</p>
+                        </div>
                     </div>
 
                     {/* Cover URL */}
@@ -460,10 +494,10 @@ export default function CourseEditorWrapper({ courseId, role }: CourseEditorProp
 
                 {/* Tabs */}
                 <div className="flex gap-1 border-b border-gray-100 mb-8">
-                    {(["content", "description", "settings"] as const).map(tab => (
+                    {(["content", "description", "overview"] as const).map(tab => (
                         <button key={tab} onClick={() => setActiveTab(tab)}
                             className={`px-6 py-3 font-semibold text-sm whitespace-nowrap border-b-2 transition-colors capitalize ${activeTab === tab ? "border-indigo-500 text-indigo-600" : "border-transparent text-gray-500 hover:text-gray-800 hover:border-gray-200"}`}>
-                            {tab}
+                            {tab === 'overview' ? 'Overview' : tab === 'description' ? 'Description' : 'Content'}
                         </button>
                     ))}
                 </div>
@@ -556,17 +590,54 @@ export default function CourseEditorWrapper({ courseId, role }: CourseEditorProp
                     </div>
                 )}
 
-                {/* ─── Settings tab ─── */}
-                {activeTab === "settings" && (
+                {/* ─── Overview tab ─── */}
+                {activeTab === "overview" && (
                     <div className="animate-in fade-in duration-200 space-y-6">
-                        <div className="bg-gray-50 rounded-2xl p-6 border border-gray-100 space-y-4">
-                            <h3 className="font-bold text-gray-800">Course Information</h3>
-                            <div className="grid grid-cols-2 gap-4 text-sm">
-                                <div><span className="text-gray-400 text-xs uppercase font-bold tracking-wider">Course ID</span><p className="font-semibold text-gray-900 mt-1">#{courseId}</p></div>
-                                <div><span className="text-gray-400 text-xs uppercase font-bold tracking-wider">Status</span><p className={`mt-1 inline-flex px-2.5 py-0.5 rounded-full text-xs font-semibold ${statusBadgeClass(status)}`}>{STATUS_MAP[status]}</p></div>
-                                <div><span className="text-gray-400 text-xs uppercase font-bold tracking-wider">Lessons</span><p className="font-semibold text-gray-900 mt-1">{contentItems.filter(i => i.kind === "lesson").length}</p></div>
-                                <div><span className="text-gray-400 text-xs uppercase font-bold tracking-wider">Quizzes</span><p className="font-semibold text-gray-900 mt-1">{contentItems.filter(i => i.kind === "quiz").length}</p></div>
-                            </div>
+                        {/* Stat grid */}
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                            {[
+                                { label: 'Lessons', value: totalLesson, icon: '📚', color: 'bg-indigo-50 text-indigo-600' },
+                                { label: 'Quizzes', value: contentItems.filter(i => i.kind === 'quiz').length, icon: '❓', color: 'bg-violet-50 text-violet-600' },
+                                { label: 'Total Duration', value: totalDuration > 0 ? `${totalDuration} min` : '—', icon: '⏱', color: 'bg-emerald-50 text-emerald-600' },
+                                { label: 'Price', value: price ? `$${parseFloat(price).toFixed(2)}` : 'Free', icon: '💰', color: 'bg-amber-50 text-amber-600' },
+                            ].map(s => (
+                                <div key={s.label} className={`${s.color} rounded-2xl p-5 border border-current/10`}>
+                                    <div className="text-2xl mb-2">{s.icon}</div>
+                                    <div className="text-2xl font-black">{s.value}</div>
+                                    <div className="text-xs font-bold uppercase tracking-wider opacity-70 mt-0.5">{s.label}</div>
+                                </div>
+                            ))}
+                        </div>
+
+                        {/* Course info table */}
+                        <div className="bg-gray-50 rounded-2xl p-6 border border-gray-100">
+                            <h3 className="font-bold text-gray-800 mb-4">Course Details</h3>
+                            <dl className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-3 text-sm">
+                                <div className="flex justify-between border-b border-gray-100 pb-2">
+                                    <dt className="text-gray-400 font-medium">Course ID</dt>
+                                    <dd className="font-semibold text-gray-800">#{courseId}</dd>
+                                </div>
+                                <div className="flex justify-between border-b border-gray-100 pb-2">
+                                    <dt className="text-gray-400 font-medium">Status</dt>
+                                    <dd><span className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${statusBadgeClass(status)}`}>{STATUS_MAP[status]}</span></dd>
+                                </div>
+                                <div className="flex justify-between border-b border-gray-100 pb-2">
+                                    <dt className="text-gray-400 font-medium">Visibility</dt>
+                                    <dd className="font-semibold text-gray-800">{visibility === 1 ? 'Everyone' : 'Invited Only'}</dd>
+                                </div>
+                                <div className="flex justify-between border-b border-gray-100 pb-2">
+                                    <dt className="text-gray-400 font-medium">Tags</dt>
+                                    <dd className="font-semibold text-gray-800">{selectedTags.length > 0 ? selectedTags.map(t => t.name).join(', ') : '—'}</dd>
+                                </div>
+                                <div className="flex justify-between border-b border-gray-100 pb-2">
+                                    <dt className="text-gray-400 font-medium">Lesson Duration</dt>
+                                    <dd className="font-semibold text-gray-800">{totalDuration > 0 ? `${totalDuration} min` : '—'}</dd>
+                                </div>
+                                <div className="flex justify-between pb-2">
+                                    <dt className="text-gray-400 font-medium">Price</dt>
+                                    <dd className="font-semibold text-gray-800">{price ? `$${parseFloat(price).toFixed(2)}` : 'Free'}</dd>
+                                </div>
+                            </dl>
                         </div>
                     </div>
                 )}
@@ -580,6 +651,7 @@ export default function CourseEditorWrapper({ courseId, role }: CourseEditorProp
 function LessonEditView({ lesson, onClose }: { lesson: LessonData; onClose: () => void }) {
     // Description is stored inside data.description field
     const [title, setTitle] = useState(lesson.title);
+    const [lessonDuration, setLessonDuration] = useState<number>(lesson.duration ?? 0);
     const [description, setDescription] = useState<string>(
         typeof lesson.data === "object" && lesson.data !== null
             ? (lesson.data.description ?? "")
@@ -596,9 +668,9 @@ function LessonEditView({ lesson, onClose }: { lesson: LessonData; onClose: () =
     const handleSave = async () => {
         setSaving(true);
         try {
-            // Store description inside the data object alongside EditorJS blocks
             const payload = {
                 title,
+                duration: lessonDuration,
                 data: { ...editorData, description },
             };
             const res = await fetchWithAuth(`/lessons/${lesson.id}/`, {
@@ -683,6 +755,19 @@ function LessonEditView({ lesson, onClose }: { lesson: LessonData; onClose: () =
                                 <input type="text" value={title} onChange={e => setTitle(e.target.value)}
                                     className="w-full text-2xl font-bold text-gray-900 border-b-2 border-gray-200 focus:border-indigo-500 bg-transparent p-2 outline-none transition-colors" />
                             </div>
+                            <div className="max-w-xs">
+                                <label className="block text-xs font-bold text-gray-400 mb-2 tracking-widest uppercase">Duration (minutes)</label>
+                                <div className="flex items-center gap-2">
+                                    <input
+                                        type="number" min={0} step={1}
+                                        value={lessonDuration}
+                                        onChange={e => setLessonDuration(Math.max(0, parseInt(e.target.value) || 0))}
+                                        className="w-28 px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm font-semibold text-gray-700"
+                                    />
+                                    <span className="text-sm text-gray-400 font-medium">min</span>
+                                    {lessonDuration > 0 && <span className="text-xs text-indigo-600 font-semibold bg-indigo-50 px-2.5 py-1 rounded-full">⏱ {Math.floor(lessonDuration / 60)}h {lessonDuration % 60}m</span>}
+                                </div>
+                            </div>
                             <div>
                                 <label className="block text-xs font-bold text-gray-400 mb-2 tracking-widest uppercase">Description (Rich Text)</label>
                                 <TextEditor text={description} setText={setDescription} placeholder="Briefly describe what this lesson covers..." />
@@ -710,13 +795,13 @@ function LessonEditView({ lesson, onClose }: { lesson: LessonData; onClose: () =
 function QuizEditView({ quiz, onClose }: { quiz: QuizFromApi; onClose: () => void }) {
     const [title, setTitle] = useState(quiz.title);
     const [description, setDescription] = useState(quiz.description || "");
+    const [quizDuration, setQuizDuration] = useState<number>(quiz.duration ?? 0);
     const [quizData, setQuizData] = useState<QuizData>(
         quiz.data ?? { quizTitle: quiz.title, quizSynopsis: quiz.description || "", questions: [] }
     );
     const [saving, setSaving] = useState(false);
     const [preview, setPreview] = useState(false);
 
-    // Keep quizData title in sync with our title field
     const handleTitleChange = (val: string) => {
         setTitle(val);
         setQuizData(prev => ({ ...prev, quizTitle: val }));
@@ -735,7 +820,8 @@ function QuizEditView({ quiz, onClose }: { quiz: QuizFromApi; onClose: () => voi
                 body: JSON.stringify({
                     title,
                     description,
-                    data: quizData,  // full QuizData object stored as JSON
+                    duration: quizDuration,
+                    data: quizData,
                 }),
             });
             if (!res.ok) throw new Error("Save failed");
@@ -781,12 +867,11 @@ function QuizEditView({ quiz, onClose }: { quiz: QuizFromApi; onClose: () => voi
                             <Eye size={16} className="text-violet-500" />
                             <p className="text-violet-700 text-sm font-semibold">Learner Preview — this is how students will experience this quiz</p>
                         </div>
-                        <LearnovaQuiz status="attempting" data={quizData} />
+                        <LearnovaQuiz status="attempting" data={quizData} duration={quizDuration} />
                     </div>
                 ) : (
                     // Edit mode
                     <>
-                        {/* Title + description fields shown above the quiz editor */}
                         <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm space-y-5">
                             <div>
                                 <label className="block text-xs font-bold text-gray-400 mb-2 tracking-widest uppercase">Quiz Title</label>
@@ -806,6 +891,22 @@ function QuizEditView({ quiz, onClose }: { quiz: QuizFromApi; onClose: () => voi
                                     placeholder="Brief description shown before the quiz starts..."
                                     className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500 resize-none text-sm"
                                 />
+                            </div>
+                            <div className="max-w-xs">
+                                <label className="block text-xs font-bold text-gray-400 mb-2 tracking-widest uppercase">Time Limit (minutes)</label>
+                                <div className="flex items-center gap-3">
+                                    <input
+                                        type="number" min={0} step={1}
+                                        value={quizDuration}
+                                        onChange={e => setQuizDuration(Math.max(0, parseInt(e.target.value) || 0))}
+                                        className="w-28 px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500 text-sm font-semibold text-gray-700"
+                                    />
+                                    <span className="text-sm text-gray-400 font-medium">min</span>
+                                    {quizDuration > 0
+                                        ? <span className="text-xs text-violet-600 font-semibold bg-violet-50 px-2.5 py-1 rounded-full">⏱ Countdown timer active</span>
+                                        : <span className="text-xs text-gray-400">No limit (0 = unlimited)</span>
+                                    }
+                                </div>
                             </div>
                         </div>
 

@@ -19,11 +19,11 @@ router.register(r'lessons', LessonViewSet)
 router.register(r'attachments', AttachmentViewSet)
 router.register(r'quizzes', QuizViewSet)
 router.register(r'quiz-rewards', QuizRewardViewSet)
-router.register(r'enrollments', EnrollmentViewSet)
-router.register(r'user-progress', UserProgressViewSet)
-router.register(r'quiz-attempts', UserQuizAttemptViewSet)
-router.register(r'lesson-stats', UserLessonStatViewSet)
-router.register(r'points-history', UserPointsHistoryViewSet)
+router.register(r'enrollments', EnrollmentViewSet, basename='enrollment')
+router.register(r'user-progress', UserProgressViewSet, basename='user-progress')
+router.register(r'quiz-attempts', UserQuizAttemptViewSet, basename='quiz-attempt')
+router.register(r'lesson-stats', UserLessonStatViewSet, basename='lesson-stat')
+router.register(r'points-history', UserPointsHistoryViewSet, basename='points-history')
 
 urlpatterns = [
     path('admin/', admin.site.urls),
