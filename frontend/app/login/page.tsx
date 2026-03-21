@@ -28,15 +28,15 @@ export default function LoginPage() {
 
       if (res.ok) {
         const data = await res.json();
-        
+
         // Fetch real user details
         const meRes = await fetch("http://localhost:8000/api/users/me/", {
-            headers: {
-                "Authorization": `Bearer ${data.access}`
-            }
+          headers: {
+            "Authorization": `Bearer ${data.access}`
+          }
         });
         const userData = await meRes.json();
-        
+
         login(data.access, data.refresh, userData);
         router.push("/");
       } else {

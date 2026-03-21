@@ -20,6 +20,8 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Learnova - eLearning Platform",
   description: "Learn interactively, anywhere, anytime.",
+  title: "Learnova - eLearning Platform",
+  description: "Learn interactively, anywhere, anytime.",
 };
 
 export default function RootLayout({

@@ -21,9 +21,9 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType>({
   user: null,
   loading: true,
-  login: () => {},
-  logout: () => {},
-  checkAuth: async () => {},
+  login: () => { },
+  logout: () => { },
+  checkAuth: async () => { },
 });
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
@@ -43,10 +43,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const checkAuth = async () => {
     try {
       setLoading(true);
-      const res = await fetchWithAuth('/users/me/'); 
+      const res = await fetchWithAuth('/users/me/');
       if (res.ok) {
         const userData = await res.json();
-        setUser(userData); 
+        setUser(userData);
       } else {
         logout();
       }
