@@ -13,6 +13,7 @@ from .serializers import (
 class EnrollmentViewSet(viewsets.ModelViewSet):
     serializer_class = EnrollmentSerializer
     permission_classes = [permissions.IsAuthenticated]
+    queryset = Enrollment.objects.all()
 
     def get_queryset(self):
         qs = Enrollment.objects.select_related('user', 'course').all()
@@ -26,6 +27,25 @@ class EnrollmentViewSet(viewsets.ModelViewSet):
         if enroll_status:
             qs = qs.filter(status=enroll_status)
         return qs.order_by('-created_at')
+
+    def create(self, request, *args, **kwargs):
+        """Handle enrollment creation with duplicate prevention."""
+        course_id = request.data.get('course')
+        
+        if not course_id:
+            return Response(
+                {'error': 'course field is required'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Check if user is already enrolled
+        existing = Enrollment.objects.filter(user=request.user, course_id=course_id).first()
+        if existing:
+            serializer = self.get_serializer(existing)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        
+        # Create new enrollment with user auto-set
+        return super().create(request, *args, **kwargs)
 
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
@@ -42,7 +62,7 @@ class EnrollmentViewSet(viewsets.ModelViewSet):
         """Aggregate enrollment stats for a course."""
         course_id = request.query_params.get('course')
         if not course_id:
-            return Response({'error': 'course param required'}, status=400)
+            return Response({'error': 'course param required'}, status=status.HTTP_400_BAD_REQUEST)
 
         enrollments = Enrollment.objects.filter(course_id=course_id)
         total = enrollments.count()

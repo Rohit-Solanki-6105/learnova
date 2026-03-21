@@ -1,7 +1,5 @@
 from rest_framework import serializers
-from django.db.models import Count, Sum, Avg
 from .models import Enrollment, UserProgress, UserQuizAttempt, UserLessonStat, UserPointsHistory
-from users.serializers import UserSerializer
 
 
 class UserProgressSerializer(serializers.ModelSerializer):
@@ -59,6 +57,9 @@ class EnrollmentSerializer(serializers.ModelSerializer):
             'status', 'status_display', 'completed_at', 'created_at', 'updated_at',
             'lessons_completed', 'quizzes_attempted', 'total_lessons',
         ]
+        read_only_fields = ('id', 'user', 'user_email', 'user_name', 'course_title', 
+                           'status_display', 'created_at', 'updated_at', 
+                           'lessons_completed', 'quizzes_attempted', 'total_lessons')
 
     def get_user_name(self, obj):
         u = obj.user
