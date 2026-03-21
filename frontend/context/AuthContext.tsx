@@ -21,9 +21,9 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType>({
   user: null,
   loading: true,
-  login: () => {},
-  logout: () => {},
-  checkAuth: async () => {},
+  login: () => { },
+  logout: () => { },
+  checkAuth: async () => { },
 });
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
@@ -43,19 +43,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const checkAuth = async () => {
     try {
       setLoading(true);
-<<<<<<< HEAD
-      const res = await fetchWithAuth('/users/'); // Just to verify token is valid, ideally an info endpoint
-      if (res.ok) {
-        // Need a better /me endpoint, assuming we get the data from somewhere or we decode JWT.
-        // For simplicity we will assume JWT has info or we just know they are logged in.
-        // Let's decode or fetch me. For now, we will mark them as authenticated.
-        setUser({ id: -1, email: "user@learnova", name: "User", role: 3 }); 
-=======
-      const res = await fetchWithAuth('/users/me/'); 
+      const res = await fetchWithAuth('/users/me/');
       if (res.ok) {
         const userData = await res.json();
-        setUser(userData); 
->>>>>>> 532df587a205cebd584ac5746f182f61db67f47c
+        setUser(userData);
       } else {
         logout();
       }

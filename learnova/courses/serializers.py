@@ -1,8 +1,5 @@
 from rest_framework import serializers
-<<<<<<< HEAD
-=======
 from quizzes.serializers import QuizSerializer
->>>>>>> 532df587a205cebd584ac5746f182f61db67f47c
 from .models import Course, Lesson, Attachment
 
 class AttachmentSerializer(serializers.ModelSerializer):
@@ -19,16 +16,9 @@ class LessonSerializer(serializers.ModelSerializer):
 
 class CourseSerializer(serializers.ModelSerializer):
     lessons = LessonSerializer(many=True, read_only=True)
-<<<<<<< HEAD
-
-    class Meta:
-        model = Course
-        fields = '__all__'
-=======
     quizzes = QuizSerializer(many=True, read_only=True)
 
     class Meta:
         model = Course
         fields = ['id', 'title', 'description', 'created_at', 'updated_at', 'created_by', 'updated_by', 'visibility', 'price', 'thumbnail', 'status', 'total_lesson', 'total_duration', 'responsible', 'lessons', 'quizzes']
->>>>>>> 532df587a205cebd584ac5746f182f61db67f47c
         read_only_fields = ['created_by', 'updated_by']
