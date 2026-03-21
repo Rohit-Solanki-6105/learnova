@@ -1,4 +1,6 @@
 from django.db import models
+from django.db.models.signals import post_save, post_delete
+from django.dispatch import receiver
 from django.conf import settings
 
 class Tag(models.Model):
@@ -42,9 +44,39 @@ class Lesson(models.Model):
     title = models.CharField(max_length=255)
     data = models.JSONField(null=True, blank=True, help_text="JSON data using editor.js")
     sequence = models.IntegerField(default=0)
+    duration = models.IntegerField(default=0, help_text="Duration in minutes")
 
     def __str__(self):
         return self.title
+
+
+# ─── Signals: auto-update course stats ───────────────────────────────────────
+
+def _update_course_stats(course_id):
+    """Recompute total_duration and total_lesson for a course."""
+    if not course_id:
+        return
+    from quizzes.models import Quiz
+    lesson_qs = Lesson.objects.filter(course_id=course_id)
+    lesson_count = lesson_qs.count()
+    lesson_dur = lesson_qs.aggregate(total=models.Sum('duration'))['total'] or 0
+    quiz_dur = Quiz.objects.filter(course_id=course_id).aggregate(
+        total=models.Sum('duration')
+    )['total'] or 0
+    Course.objects.filter(pk=course_id).update(
+        total_lesson=lesson_count,
+        total_duration=lesson_dur + quiz_dur
+    )
+
+
+@receiver(post_save, sender=Lesson)
+def lesson_post_save(sender, instance, **kwargs):
+    _update_course_stats(instance.course_id)
+
+
+@receiver(post_delete, sender=Lesson)
+def lesson_post_delete(sender, instance, **kwargs):
+    _update_course_stats(instance.course_id)
 
 
 class Attachment(models.Model):

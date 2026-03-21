@@ -26,6 +26,7 @@ interface LessonData {
     description?: string;   // stored inside data.description
     data: any;              // EditorJS JSON
     course: number;
+    duration: number;       // minutes
 }
 
 interface QuizFromApi {
@@ -35,6 +36,7 @@ interface QuizFromApi {
     sequence: number;
     data: QuizData | null;
     course: number;
+    duration: number;       // minutes
 }
 
 interface ContentItem {
@@ -61,6 +63,7 @@ interface CourseDetail {
     status: 1 | 2 | 3;
     visibility: 1 | 2;
     responsible: number | null;
+    price: string | null;
     tags: Tag[];
     lessons: LessonData[];
     quizzes: QuizFromApi[];
@@ -98,9 +101,12 @@ export default function CourseEditorWrapper({ courseId, role }: CourseEditorProp
     const [visibility, setVisibility] = useState<1 | 2>(1);
     const [responsibleId, setResponsibleId] = useState<number | null>(null);
     const [selectedTags, setSelectedTags] = useState<Tag[]>([]);
+    const [price, setPrice] = useState<string>("");
+    const [totalDuration, setTotalDuration] = useState<number>(0);
+    const [totalLesson, setTotalLesson] = useState<number>(0);
 
     const [instructors, setInstructors] = useState<Instructor[]>([]);
-    const [activeTab, setActiveTab] = useState<"content" | "description" | "settings">("content");
+    const [activeTab, setActiveTab] = useState<"content" | "description" | "overview">("content");
     const [contentItems, setContentItems] = useState<ContentItem[]>([]);
 
     const [editingLesson, setEditingLesson] = useState<LessonData | null>(null);
@@ -126,6 +132,9 @@ export default function CourseEditorWrapper({ courseId, role }: CourseEditorProp
             setVisibility(data.visibility);
             setResponsibleId(data.responsible);
             setSelectedTags(data.tags ?? []);
+            setPrice(data.price ? String(data.price) : "");
+            setTotalDuration(data.total_duration ?? 0);
+            setTotalLesson(data.total_lesson ?? 0);
 
             const merged: ContentItem[] = [
                 ...data.lessons.map(l => ({ kind: "lesson" as const, id: l.id, title: l.title, sequence: l.sequence })),
@@ -176,6 +185,7 @@ export default function CourseEditorWrapper({ courseId, role }: CourseEditorProp
     };
 
     const handleSaveDetails = async () => {
+        const priceVal = price.trim() === '' || parseFloat(price) === 0 ? null : parseFloat(price).toFixed(2);
         const ok = await saveCourse({
             title: courseTitle,
             description: courseDescription,
@@ -183,6 +193,7 @@ export default function CourseEditorWrapper({ courseId, role }: CourseEditorProp
             visibility,
             responsible: responsibleId,
             tag_ids: selectedTags.map(t => t.id),
+            price: priceVal,
         });
         if (ok) toast.success("Course details saved!");
     };
