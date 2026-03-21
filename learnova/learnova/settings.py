@@ -84,9 +84,9 @@ DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.mysql',
         'NAME': 'learnova',
-        'USER': 'root',
-        'PASSWORD': 'root',
-        'HOST': 'localhost',
+        'USER': 'admin',
+        'PASSWORD': 'qwerty',
+        'HOST': 'db',
         'PORT': '3306',
     }
 }

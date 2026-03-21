@@ -86,8 +86,8 @@ export default function PublicCoursesPage() {
                     </div>
                 </div>
                 <div className="flex items-center gap-4">
-                    <Link href="#" className="hidden sm:block px-5 py-2.5 text-sm font-bold text-gray-700 hover:text-gray-900 transition-colors">Log In</Link>
-                    <Link href="#" className="px-5 py-2.5 bg-[#F43F5E] hover:bg-rose-600 shadow-sm shadow-rose-200 text-white rounded-full text-sm font-bold transition-all active:scale-95">Sign Up</Link>
+                    <Link href="/login" className="hidden sm:block px-5 py-2.5 text-sm font-bold text-gray-700 hover:text-gray-900 transition-colors">Log In</Link>
+                    <Link href="/register" className="px-5 py-2.5 bg-[#F43F5E] hover:bg-rose-600 shadow-sm shadow-rose-200 text-white rounded-full text-sm font-bold transition-all active:scale-95">Sign Up</Link>
                 </div>
             </nav>
 
@@ -126,8 +126,8 @@ export default function PublicCoursesPage() {
                                 key={category}
                                 onClick={() => setActiveCategory(category)}
                                 className={`flex-shrink-0 px-6 py-3 rounded-full text-sm font-bold transition-all ${activeCategory === category
-                                        ? 'bg-[#F43F5E] text-white shadow-md shadow-rose-200'
-                                        : 'bg-white text-gray-600 hover:bg-gray-50 border border-gray-100'
+                                    ? 'bg-[#F43F5E] text-white shadow-md shadow-rose-200'
+                                    : 'bg-white text-gray-600 hover:bg-gray-50 border border-gray-100'
                                     }`}
                             >
                                 {category}
@@ -155,8 +155,8 @@ export default function PublicCoursesPage() {
                                 <div className="flex gap-2 relative z-10">
                                     {course.tags.map((tag, i) => (
                                         <span key={i} className={`px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest rounded-md shadow-sm transition-colors ${tag === 'Popular' ? 'bg-[#E11D48] text-white' :
-                                                tag === 'New' ? 'bg-white text-[#F43F5E]' :
-                                                    'bg-black/40 text-white backdrop-blur-md'
+                                            tag === 'New' ? 'bg-white text-[#F43F5E]' :
+                                                'bg-black/40 text-white backdrop-blur-md'
                                             }`}>
                                             {tag}
                                         </span>

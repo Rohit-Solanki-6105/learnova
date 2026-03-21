@@ -45,6 +45,27 @@ services:
     volumes:
       - ./learnova:/app
 
+  frontend:
+    build: ./frontend
+    container_name: learnova_frontend
+    restart: always
+    command: >
+      sh -c "
+      echo 'Waiting for backend...' &&
+      while ! nc -z backend 8000; do
+        sleep 1
+      done &&
+      echo 'Backend is up!' &&
+      npm run dev
+      "
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+
     
 
 volumes:
