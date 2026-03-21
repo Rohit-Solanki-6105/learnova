@@ -3,6 +3,7 @@
 import React, { useState, useEffect, use } from "react";
 import { Plus, Users, Mail, Eye, Trash2, MoreVertical, ChevronDown, Video, FileText, CheckSquare, Image as ImageIcon, ArrowLeft, Edit2 } from "lucide-react";
 import Link from "next/link";
+import TextEditor from "@/components/TextEditor";
 
 export default function CourseFormPage({ params }: { params: Promise<{ id: string }> }) {
     const resolvedParams = use(params);
@@ -13,6 +14,7 @@ export default function CourseFormPage({ params }: { params: Promise<{ id: strin
     const [tags, setTags] = useState("Sales, CRM, Beginner");
     const [responsible, setResponsible] = useState("Jane Smith");
     const [published, setPublished] = useState(false);
+    const [courseDescription, setCourseDescription] = useState("");
 
     // For 3-dot dropdown tracking
     const [activeDropdown, setActiveDropdown] = useState<number | null>(null);
@@ -238,10 +240,20 @@ export default function CourseFormPage({ params }: { params: Promise<{ id: strin
                 )}
 
                 {activeTab === "description" && (
-                    <div className="animate-in fade-in duration-300 py-12 text-center text-gray-400">
-                        <FileText size={48} className="mx-auto mb-4 opacity-50" />
-                        <p className="text-lg">Description editor placeholder.</p>
-                        <p className="text-sm mt-2">Implementation pending.</p>
+                    <div className="animate-in fade-in duration-300">
+                        <div className="mb-6">
+                            <h2 className="text-xl font-bold text-gray-900 mb-2">Course Description</h2>
+                            <p className="text-sm text-gray-500">
+                                Write a comprehensive overview of what students will learn in this course. This will be displayed on the public landing page.
+                            </p>
+                        </div>
+                        <div className="bg-white">
+                            <TextEditor
+                                text={courseDescription}
+                                setText={setCourseDescription}
+                                placeholder="Detail the curriculum, target audience, and prerequisites..."
+                            />
+                        </div>
                     </div>
                 )}
 
