@@ -105,7 +105,7 @@ const Editor = ({ is_editting, file, setFile }: EditorProps) => {
                                 // Editor.js completely hides the "Paste URL" input field if endpoints are missing.
                                 // We put fake ones here to force the UI to render. They are NEVER called!
                                 endpoints: {
-                                    byFile: 'fake', 
+                                    byFile: 'fake',
                                     byUrl: 'fake',
                                 },
                                 uploader: {

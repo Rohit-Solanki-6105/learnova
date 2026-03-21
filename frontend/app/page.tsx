@@ -1,6 +1,16 @@
 import Link from "next/link";
+'use client'
+import LogoutButton from "@/components/LogoutButton";
+import { useAuth } from "@/context/AuthContext";
+import Image from "next/image";
+import { useEffect } from "react";
 
 export default function Home() {
+  const { login, user, loading } = useAuth();
+  // useEffect(() => {
+  //   console.log(user)
+  // }, [user])
+  if (loading) return "loading";
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50 text-gray-900 font-sans p-8">
       <div className="max-w-2xl text-center space-y-6">
