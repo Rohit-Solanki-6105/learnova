@@ -5,6 +5,7 @@ import { Kanban } from "react-kanban-kit";
 import { Search, LayoutGrid, List, Plus, Edit2, Share2, Eye, Clock, BookOpen, X } from "lucide-react";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
+import CreateCourseModal from "@/components/CreateCourseModal";
 
 type CourseStatus = "Draft" | "Published" | "Archived";
 
@@ -31,26 +32,13 @@ export default function CoursesAdminPage() {
     const [view, setView] = useState<"kanban" | "list">("kanban");
     const [searchQuery, setSearchQuery] = useState("");
     const [isModalOpen, setIsModalOpen] = useState(false);
-    const [newCourseName, setNewCourseName] = useState("");
 
     const filteredCourses = courses.filter((c) =>
         c.title.toLowerCase().includes(searchQuery.toLowerCase())
     );
 
-    const handleCreateCourse = (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!newCourseName.trim()) return;
-        const newCourse: Course = {
-            id: `c${Date.now()}`,
-            title: newCourseName,
-            tags: [],
-            views: 0,
-            totalLessons: 0,
-            totalDuration: "0h",
-            status: "Draft",
-        };
-        setCourses([...courses, newCourse]);
-        setNewCourseName("");
+    const onCourseCreated = (newCourse: Course) => {
+        setCourses((prevCourses) => [...prevCourses, newCourse]);
         setIsModalOpen(false);
         toast.success("Course created successfully!", {
             action: {
@@ -275,55 +263,12 @@ export default function CoursesAdminPage() {
             )}
 
             {/* Create Course Modal */}
-            {isModalOpen && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ backgroundColor: 'rgba(0, 0, 0, 0.4)', backdropFilter: 'blur(4px)' }}>
-                    <div className="bg-white rounded-3xl w-full max-w-md shadow-2xl p-6 relative">
-                        <button
-                            onClick={() => setIsModalOpen(false)}
-                            className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 p-2 rounded-full hover:bg-gray-100 transition-colors"
-                        >
-                            <X size={20} />
-                        </button>
-
-                        <h2 className="text-2xl font-bold text-gray-900 mb-1">Create New Course</h2>
-                        <p className="text-sm text-gray-500 mb-6">Enter a title to initialize your new course draft.</p>
-
-                        <form onSubmit={handleCreateCourse}>
-                            <div className="space-y-4">
-                                <div>
-                                    <label htmlFor="courseName" className="block text-sm font-medium text-gray-700 mb-1">Course Title</label>
-                                    <input
-                                        id="courseName"
-                                        type="text"
-                                        required
-                                        autoFocus
-                                        value={newCourseName}
-                                        onChange={(e) => setNewCourseName(e.target.value)}
-                                        placeholder="e.g. Introduction to Masterpieces"
-                                        className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-500 focus:bg-white transition-colors"
-                                    />
-                                </div>
-                            </div>
-
-                            <div className="mt-8 flex justify-end gap-3">
-                                <button
-                                    type="button"
-                                    onClick={() => setIsModalOpen(false)}
-                                    className="px-5 py-2.5 text-gray-600 font-medium hover:bg-gray-100 rounded-full transition-colors"
-                                >
-                                    Cancel
-                                </button>
-                                <button
-                                    type="submit"
-                                    className="px-6 py-2.5 bg-[#f43f5e] hover:bg-rose-600 text-white font-medium rounded-full transition-colors shadow-sm"
-                                >
-                                    Create & Continue
-                                </button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            )}
+            <CreateCourseModal 
+                isOpen={isModalOpen} 
+                onClose={() => setIsModalOpen(false)} 
+                onCourseCreated={onCourseCreated}
+                baseEditPath="/admin/courses"
+            />
         </div>
     );
 }
