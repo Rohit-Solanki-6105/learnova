@@ -12,10 +12,6 @@ import {
     MessageSquare,
     Download,
     ArrowRight,
-    Play,
-    Pause,
-    Settings,
-    Maximize,
     SquareDashed,
     LayoutTemplate,
     FileText,
@@ -23,6 +19,7 @@ import {
     MessageCircle
 } from "lucide-react";
 import { BlocksViewer } from "@/components/Editor";
+import { LessonVideoPlayer } from "@/components/LessonVideoPlayer";
 
 const MOCK_LESSON_CONTENT = {
     time: 1711100000000,
@@ -195,34 +192,12 @@ export default function LessonPlayerPage({ params }: { params: Promise<{ courseI
                         </div>
                     </header>
 
-                    {/* Huge Video Player */}
-                    <section className="relative aspect-video w-full bg-[#111212] rounded-[2rem] overflow-hidden mb-12 group shadow-2xl flex items-center justify-center">
-                        <img
-                            alt="Video Player Background"
-                            className="absolute inset-0 w-full h-full object-cover opacity-60"
-                            src="https://images.unsplash.com/photo-1542744094-3a31f272c490?q=80&w=2000&auto=format&fit=crop"
+                    {/* Video Player with Video.js (fullscreen supported) */}
+                    <section className="mb-12">
+                        <LessonVideoPlayer
+                            src="https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"
+                            poster="https://images.unsplash.com/photo-1542744094-3a31f272c490?q=80&w=2000&auto=format&fit=crop"
                         />
-                        <button className="relative w-24 h-24 bg-[#f3184c] text-white rounded-full flex items-center justify-center shadow-2xl transition-transform hover:scale-110 active:scale-90 group-hover:bg-[#e70545] z-10">
-                            <Play size={40} fill="currentColor" className="ml-2" />
-                        </button>
-                        {/* Video Controls Overlay */}
-                        <div className="absolute bottom-0 left-0 w-full p-6 bg-gradient-to-t from-black/80 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                            <div className="h-1.5 w-full bg-white/20 rounded-full mb-4 cursor-pointer relative overflow-hidden group/scrubber">
-                                <div className="h-full bg-[#f3184c] rounded-full relative" style={{ width: "45%" }}>
-                                    <div className="absolute right-0 top-1/2 -translate-y-1/2 w-3 h-3 bg-white rounded-full border-2 border-[#f3184c] shadow-md opacity-0 group-hover/scrubber:opacity-100 transition-opacity"></div>
-                                </div>
-                            </div>
-                            <div className="flex justify-between items-center text-white">
-                                <div className="flex items-center gap-6">
-                                    <Pause className="cursor-pointer hover:text-[#f3184c] transition-colors" size={20} fill="currentColor" />
-                                    <span className="text-xs font-mono font-medium tracking-widest">12:30 / 25:00</span>
-                                </div>
-                                <div className="flex items-center gap-6">
-                                    <Settings className="cursor-pointer hover:text-[#f3184c] transition-colors" size={20} />
-                                    <Maximize className="cursor-pointer hover:text-[#f3184c] transition-colors" size={20} />
-                                </div>
-                            </div>
-                        </div>
                     </section>
 
                     {/* Lesson Details Grid */}
