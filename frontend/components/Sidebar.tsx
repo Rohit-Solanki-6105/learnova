@@ -4,6 +4,8 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
 import { LucideIcon } from "lucide-react"
+import LogoutButton from "./LogoutButton"
+import { useAuth } from "@/context/AuthContext"
 
 interface SidebarItem {
   name: string
@@ -28,16 +30,16 @@ interface SidebarProps {
   }
 }
 
-export function Sidebar({ 
-  items, 
-  title, 
-  logo, 
-  activeColor = "text-rose-600", 
+export function Sidebar({
+  items,
+  title,
+  logo,
+  activeColor = "text-rose-600",
   activeBg = "bg-rose-50",
-  footerLink 
+  footerLink
 }: SidebarProps) {
   const pathname = usePathname()
-
+  const { user } = useAuth();
   return (
     <aside className="fixed left-0 top-0 z-40 h-screen w-64 -translate-x-full border-r border-gray-200 bg-white transition-transform sm:translate-x-0 dark:border-gray-700 dark:bg-gray-800" aria-label="Sidebar">
       <div className="flex h-full flex-col overflow-y-auto pb-4">
@@ -49,7 +51,7 @@ export function Sidebar({
             </Link>
           </div>
         )}
-        
+
         <nav className="flex-1 space-y-1 px-3 py-4">
           {title && (
             <h2 className="mb-4 px-2 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
@@ -91,6 +93,8 @@ export function Sidebar({
               <footerLink.icon size={18} className="text-gray-400" />
               {footerLink.name}
             </Link>
+            {user && user.name}
+            <LogoutButton />
           </div>
         )}
       </div>

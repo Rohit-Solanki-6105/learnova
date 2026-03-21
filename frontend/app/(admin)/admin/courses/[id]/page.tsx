@@ -1,16 +1,9 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { use } from "react";
 import CourseEditorWrapper from "@/components/CourseEditorWrapper";
 
-export default function AdminCourseEditorPage({ params }: { params: { id: string } }) {
-    const [id, setId] = useState<string>("");
-
-    useEffect(() => {
-        if (params && params.id) setId(params.id);
-    }, [params]);
-
-    if (!id) return null; // or a loading state
-
-    return <CourseEditorWrapper courseId={id} role="admin" />;
+export default function AdminCourseEditorPage({ params }: { params: Promise<{ id: string }> }) {
+    const resolvedParams = use(params);
+    return <CourseEditorWrapper courseId={resolvedParams.id} role="admin" />;
 }

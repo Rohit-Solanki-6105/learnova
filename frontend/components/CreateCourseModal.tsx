@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { X } from "lucide-react";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
+import { fetchWithAuth } from "@/lib/auth";
 
 interface CreateCourseModalProps {
     isOpen: boolean;
@@ -24,17 +25,8 @@ export default function CreateCourseModal({ isOpen, onClose, onCourseCreated, ba
         
         setIsCreating(true);
         try {
-            const token = localStorage.getItem("access_token");
-            const headers: HeadersInit = {
-                "Content-Type": "application/json",
-            };
-            if (token) {
-                headers["Authorization"] = `Bearer ${token}`;
-            }
-
-            const res = await fetch("http://localhost:8000/api/courses/", {
+            const res = await fetchWithAuth("/courses/", {
                 method: "POST",
-                headers,
                 body: JSON.stringify({
                     title: newCourseName,
                     description: newCourseDescription,
