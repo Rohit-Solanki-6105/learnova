@@ -1,0 +1,51 @@
+services:
+  db:
+    image: mysql:8.0
+    container_name: learnova_db
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: secret
+      MYSQL_DATABASE: learnova
+      MYSQL_USER: admin
+      MYSQL_PASSWORD: qwerty
+    
+    
+    
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - learnova_db_data:/var/lib/mysql
+
+    ports:
+      - "3306:3306"
+
+  backend:
+    build: ./learnova
+    container_name: learnova_backend
+    restart: always
+    command: >
+      sh -c "
+      echo 'Waiting for MySQL...' &&
+      while ! nc -z db 3306; do
+        sleep 1
+      done &&
+      echo 'MySQL is up!' &&
+      python manage.py migrate &&
+      python manage.py runserver 0.0.0.0:8000
+      "
+    environment:
+      DATABASE_URL: mysql://admin:qwerty@db:3306/learnova
+    ports:
+      - "8000:8000"
+    depends_on:
+      - db
+    volumes:
+      - ./learnova:/app
+
+    
+
+volumes:
+  learnova_db_data:

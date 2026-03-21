@@ -1,4 +1,9 @@
 from rest_framework import viewsets, permissions
+<<<<<<< HEAD
+=======
+from rest_framework.decorators import action
+from rest_framework.response import Response
+>>>>>>> 532df587a205cebd584ac5746f182f61db67f47c
 from django.contrib.auth import get_user_model
 from .serializers import UserSerializer
 
@@ -12,3 +17,11 @@ class UserViewSet(viewsets.ModelViewSet):
         if self.action == 'create':
             return [permissions.AllowAny()]
         return [permissions.IsAuthenticatedOrReadOnly()]
+<<<<<<< HEAD
+=======
+
+    @action(detail=False, methods=['get'], permission_classes=[permissions.IsAuthenticated])
+    def me(self, request):
+        serializer = self.get_serializer(request.user)
+        return Response(serializer.data)
+>>>>>>> 532df587a205cebd584ac5746f182f61db67f47c

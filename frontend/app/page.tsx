@@ -1,9 +1,19 @@
+'use client'
+import LogoutButton from "@/components/LogoutButton";
+import { useAuth } from "@/context/AuthContext";
 import Image from "next/image";
+import { useEffect } from "react";
 
 export default function Home() {
+  const { login, user, loading } = useAuth();
+  // useEffect(() => {
+  //   console.log(user)
+  // }, [user])
+  if (loading) return "loading";
   return (
     <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      logged in
+      {user ? <LogoutButton /> : 'not logged in'}
+      {user && user.email}
       <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
         <Image
           className="dark:invert"
