@@ -4,7 +4,7 @@ from rest_framework.routers import DefaultRouter
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
 from users.views import UserViewSet
-from courses.views import CourseViewSet, LessonViewSet, AttachmentViewSet
+from courses.views import CourseViewSet, LessonViewSet, AttachmentViewSet, TagViewSet
 from quizzes.views import QuizViewSet, QuizRewardViewSet
 from enrollments.views import (
     EnrollmentViewSet, UserProgressViewSet, UserQuizAttemptViewSet,
@@ -14,6 +14,7 @@ from enrollments.views import (
 router = DefaultRouter()
 router.register(r'users', UserViewSet)
 router.register(r'courses', CourseViewSet)
+router.register(r'tags', TagViewSet)
 router.register(r'lessons', LessonViewSet)
 router.register(r'attachments', AttachmentViewSet)
 router.register(r'quizzes', QuizViewSet)

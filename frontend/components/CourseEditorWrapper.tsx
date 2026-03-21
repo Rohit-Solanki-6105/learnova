@@ -12,6 +12,7 @@ import dynamic from "next/dynamic";
 import { toast } from "sonner";
 import TextEditor from "@/components/TextEditor";
 import LearnovaQuiz, { QuizData } from "@/components/Quiz";
+import TagsInput, { Tag } from "@/components/TagsInput";
 import { fetchWithAuth } from "@/lib/auth";
 
 const LessonEditor = dynamic(() => import("@/components/Editor"), { ssr: false });
@@ -60,6 +61,7 @@ interface CourseDetail {
     status: 1 | 2 | 3;
     visibility: 1 | 2;
     responsible: number | null;
+    tags: Tag[];
     lessons: LessonData[];
     quizzes: QuizFromApi[];
     total_lesson: number;
@@ -95,6 +97,7 @@ export default function CourseEditorWrapper({ courseId, role }: CourseEditorProp
     const [status, setStatus] = useState<1 | 2 | 3>(1);
     const [visibility, setVisibility] = useState<1 | 2>(1);
     const [responsibleId, setResponsibleId] = useState<number | null>(null);
+    const [selectedTags, setSelectedTags] = useState<Tag[]>([]);
 
     const [instructors, setInstructors] = useState<Instructor[]>([]);
     const [activeTab, setActiveTab] = useState<"content" | "description" | "settings">("content");
@@ -122,6 +125,7 @@ export default function CourseEditorWrapper({ courseId, role }: CourseEditorProp
             setStatus(data.status);
             setVisibility(data.visibility);
             setResponsibleId(data.responsible);
+            setSelectedTags(data.tags ?? []);
 
             const merged: ContentItem[] = [
                 ...data.lessons.map(l => ({ kind: "lesson" as const, id: l.id, title: l.title, sequence: l.sequence })),
@@ -178,6 +182,7 @@ export default function CourseEditorWrapper({ courseId, role }: CourseEditorProp
             thumbnail: thumbnail || null,
             visibility,
             responsible: responsibleId,
+            tag_ids: selectedTags.map(t => t.id),
         });
         if (ok) toast.success("Course details saved!");
     };
@@ -397,6 +402,13 @@ export default function CourseEditorWrapper({ courseId, role }: CourseEditorProp
                                 onChange={e => setCourseTitle(e.target.value)}
                                 className="w-full text-3xl md:text-4xl font-extrabold text-gray-900 placeholder:text-gray-300 border-none bg-transparent focus:ring-0 p-0 outline-none"
                                 placeholder="e.g: Basics of Odoo CRM"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-bold text-gray-400 mb-2 tracking-widest uppercase">Tags</label>
+                            <TagsInput
+                                selectedTags={selectedTags}
+                                onChange={setSelectedTags}
                             />
                         </div>
                         <div>
