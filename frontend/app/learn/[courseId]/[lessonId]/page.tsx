@@ -16,41 +16,21 @@ import {
 
 import { BlocksViewer } from "@/components/Editor";
 import { LessonVideoPlayer } from "@/components/LessonVideoPlayer";
+import { toAbsoluteAttachmentUrl } from "@/lib/attachments";
 import { fetchWithAuth } from "@/lib/auth";
-
-interface Attachment {
-    id: number;
-    attachment_name: string;
-    attachment_url: string;
-    attachment_type: number;
-}
-
-interface Lesson {
-    id: number;
-    title: string;
-    sequence: number;
-    duration: number;
-    data: unknown;
-    attachments?: Attachment[];
-}
-
-interface CourseDetail {
-    id: number;
-    title: string;
-    description: string;
-    lessons: Lesson[];
-}
+import {
+    buildLearningItems,
+    calculateCourseProgress,
+    type LearningCourse,
+    type LearningItem,
+    type UserProgressEntry,
+    type UserQuizAttemptEntry,
+} from "@/lib/learning";
 
 interface Enrollment {
     id: number;
     course: number;
     user: number;
-    status: number;
-}
-
-interface UserProgress {
-    id: number;
-    lesson: number;
     status: number;
 }
 
@@ -161,6 +141,13 @@ function extractMp4FromLessonData(data: unknown): string {
     return FALLBACK_VIDEO_SRC;
 }
 
+function getLearningItemHref(courseId: number, item: LearningItem): string {
+    if (item.kind === "quiz") {
+        return `/learn/${courseId}/quizzes/${item.id}`;
+    }
+    return `/learn/${courseId}/${item.id}`;
+}
+
 export default function LessonPlayerPage({
     params,
 }: {
@@ -172,10 +159,12 @@ export default function LessonPlayerPage({
 
     const router = useRouter();
 
-    const [course, setCourse] = useState<CourseDetail | null>(null);
-    const [progressEntries, setProgressEntries] = useState<UserProgress[]>([]);
+    const [course, setCourse] = useState<LearningCourse | null>(null);
+    const [progressEntries, setProgressEntries] = useState<UserProgressEntry[]>([]);
+    const [quizAttempts, setQuizAttempts] = useState<UserQuizAttemptEntry[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [isAdvancing, setIsAdvancing] = useState(false);
 
     useEffect(() => {
         let isMounted = true;
@@ -199,10 +188,11 @@ export default function LessonPlayerPage({
                     return;
                 }
 
-                const [courseRes, enrollRes, progressRes] = await Promise.all([
+                const [courseRes, enrollRes, progressRes, attemptsRes] = await Promise.all([
                     fetchWithAuth(`/courses/${courseId}/`),
                     fetchWithAuth(`/enrollments/?course=${courseId}&user=${me.id}`),
                     fetchWithAuth(`/user-progress/?course=${courseId}&user=${me.id}`),
+                    fetchWithAuth(`/quiz-attempts/?course=${courseId}&user=${me.id}`),
                 ]);
 
                 if (!courseRes.ok) {
@@ -218,15 +208,19 @@ export default function LessonPlayerPage({
                     return;
                 }
 
-                const courseData = (await courseRes.json()) as CourseDetail;
+                const courseData = (await courseRes.json()) as LearningCourse;
                 const progressData = progressRes.ok
-                    ? ((await progressRes.json()) as UserProgress[])
+                    ? ((await progressRes.json()) as UserProgressEntry[])
+                    : [];
+                const attemptsData = attemptsRes.ok
+                    ? ((await attemptsRes.json()) as UserQuizAttemptEntry[])
                     : [];
 
                 if (!isMounted) return;
 
                 setCourse(courseData);
                 setProgressEntries(Array.isArray(progressData) ? progressData : []);
+                setQuizAttempts(Array.isArray(attemptsData) ? attemptsData : []);
             } catch (err: unknown) {
                 if (!isMounted) return;
                 setError(
@@ -253,44 +247,89 @@ export default function LessonPlayerPage({
         if (!course?.lessons) return [];
         return [...course.lessons].sort((a, b) => (a.sequence ?? 0) - (b.sequence ?? 0));
     }, [course]);
+    const learningItems = useMemo(() => {
+        if (!course) return [];
+        return buildLearningItems(course);
+    }, [course]);
 
     const currentLesson = useMemo(() => {
         return sortedLessons.find((lesson) => String(lesson.id) === String(lessonId)) ?? null;
     }, [sortedLessons, lessonId]);
 
     useEffect(() => {
-        if (!course || sortedLessons.length === 0) return;
+        if (!course || learningItems.length === 0) return;
         if (currentLesson) return;
 
-        router.replace(`/learn/${course.id}/${sortedLessons[0].id}`);
-    }, [course, currentLesson, sortedLessons, router]);
+        router.replace(getLearningItemHref(course.id, learningItems[0]));
+    }, [course, currentLesson, learningItems, router]);
 
     const currentLessonIndex = useMemo(() => {
         if (!currentLesson) return -1;
         return sortedLessons.findIndex((lesson) => lesson.id === currentLesson.id);
     }, [sortedLessons, currentLesson]);
 
-    const nextLesson =
-        currentLessonIndex >= 0 && currentLessonIndex < sortedLessons.length - 1
-            ? sortedLessons[currentLessonIndex + 1]
+    const progressSummary = useMemo(() => {
+        if (!course) {
+            return {
+                percent: 0,
+                completedItems: 0,
+                totalItems: 0,
+                completedLessonIds: new Set<number>(),
+                attemptedQuizIds: new Set<number>(),
+            };
+        }
+        return calculateCourseProgress(course, progressEntries, quizAttempts);
+    }, [course, progressEntries, quizAttempts]);
+
+    const currentItemIndex = useMemo(() => {
+        if (!currentLesson) return -1;
+        return learningItems.findIndex(
+            (item) => item.kind === "lesson" && item.id === currentLesson.id
+        );
+    }, [learningItems, currentLesson]);
+
+    const nextItem =
+        currentItemIndex >= 0 && currentItemIndex < learningItems.length - 1
+            ? learningItems[currentItemIndex + 1]
             : null;
 
-    const completedLessonIds = useMemo(() => {
-        return new Set(
-            progressEntries
-                .filter((entry) => Number(entry.status) === 1)
-                .map((entry) => Number(entry.lesson))
-        );
-    }, [progressEntries]);
+    const upsertProgressEntry = (entry: UserProgressEntry) => {
+        setProgressEntries((prev) => {
+            const idx = prev.findIndex((item) => Number(item.lesson) === Number(entry.lesson));
+            if (idx >= 0) {
+                const updated = [...prev];
+                updated[idx] = entry;
+                return updated;
+            }
+            return [...prev, entry];
+        });
+    };
 
-    const completedCount = useMemo(() => {
-        return sortedLessons.filter((lesson) => completedLessonIds.has(lesson.id)).length;
-    }, [sortedLessons, completedLessonIds]);
+    const handleGoToNextItem = async () => {
+        if (!nextItem || !currentLesson || !course || isAdvancing) return;
+        setIsAdvancing(true);
 
-    const overallProgress =
-        sortedLessons.length > 0
-            ? Math.round((completedCount / sortedLessons.length) * 100)
-            : 0;
+        try {
+            const currentProgress = progressEntries.find(
+                (entry) => Number(entry.lesson) === Number(currentLesson.id)
+            );
+
+            if (!currentProgress || Number(currentProgress.status) !== 1) {
+                const res = await fetchWithAuth("/user-progress/mark-complete/", {
+                    method: "POST",
+                    body: JSON.stringify({ lesson: currentLesson.id }),
+                });
+                if (res.ok) {
+                    const saved = (await res.json()) as UserProgressEntry;
+                    upsertProgressEntry(saved);
+                }
+            }
+        } catch {
+            // Do not block navigation if progress sync fails.
+        }
+
+        router.push(getLearningItemHref(course.id, nextItem));
+    };
 
     const lessonContent = normalizeEditorData(currentLesson?.data);
     const lessonVideoSrc = extractMp4FromLessonData(currentLesson?.data);
@@ -358,25 +397,28 @@ export default function LessonPlayerPage({
                         <div className="mb-10">
                             <div className="flex justify-between items-center mb-3">
                                 <span className="text-[10px] font-bold text-[#5d5f5e] uppercase tracking-widest">Overall Progress</span>
-                                <span className="text-xs font-bold text-[#f3184c]">{overallProgress}%</span>
+                                <span className="text-xs font-bold text-[#f3184c]">{progressSummary.percent}%</span>
                             </div>
                             <div className="h-1.5 w-full bg-[#e2e2e2] rounded-full overflow-hidden">
-                                <div className="h-full bg-[#f3184c] rounded-full" style={{ width: `${overallProgress}%` }}></div>
+                                <div className="h-full bg-[#f3184c] rounded-full" style={{ width: `${progressSummary.percent}%` }}></div>
                             </div>
                             <p className="mt-2 text-[11px] text-[#5d5f5e]">
-                                {completedCount}/{sortedLessons.length} lessons completed
+                                {progressSummary.completedItems}/{progressSummary.totalItems} learning steps completed
                             </p>
                         </div>
 
                         <div className="space-y-2">
-                            {sortedLessons.map((lesson) => {
-                                const isCurrent = lesson.id === currentLesson.id;
-                                const isCompleted = completedLessonIds.has(lesson.id);
+                            {learningItems.map((item) => {
+                                const isCurrent = item.kind === "lesson" && item.id === currentLesson.id;
+                                const isCompleted =
+                                    item.kind === "lesson"
+                                        ? progressSummary.completedLessonIds.has(item.id)
+                                        : progressSummary.attemptedQuizIds.has(item.id);
 
                                 return (
                                     <Link
-                                        key={lesson.id}
-                                        href={`/learn/${course.id}/${lesson.id}`}
+                                        key={`${item.kind}-${item.id}`}
+                                        href={getLearningItemHref(course.id, item)}
                                         className={`flex items-center gap-4 py-4 px-4 rounded-2xl transition-all ${
                                             isCurrent
                                                 ? "bg-white text-[#f3184c] shadow-sm border border-white"
@@ -394,9 +436,11 @@ export default function LessonPlayerPage({
                                         </div>
                                         <div className="flex-1 min-w-0">
                                             <p className={`text-sm ${isCurrent ? "font-bold" : "font-semibold"} truncate`}>
-                                                {lesson.title || `Lesson ${lesson.sequence}`}
+                                                {item.kind === "quiz" ? `Quiz: ${item.title}` : item.title || `Lesson ${item.sequence}`}
                                             </p>
-                                            <p className="text-[10px] font-mono mt-0.5">{formatDuration(lesson.duration)}</p>
+                                            <p className="text-[10px] font-mono mt-0.5">
+                                                {item.kind === "quiz" ? "Assessment" : formatDuration(item.duration)}
+                                            </p>
                                         </div>
                                     </Link>
                                 );
@@ -422,14 +466,20 @@ export default function LessonPlayerPage({
                                 Resources
                             </a>
 
-                            {nextLesson ? (
-                                <Link
-                                    href={`/learn/${course.id}/${nextLesson.id}`}
+                            {nextItem ? (
+                                <button
+                                    type="button"
+                                    onClick={handleGoToNextItem}
+                                    disabled={isAdvancing}
                                     className="bg-[#f3184c] hover:bg-[#e01445] text-white px-8 py-4 rounded-full font-bold text-xs uppercase tracking-widest flex items-center gap-2 shadow-lg shadow-rose-500/20 transition-transform active:scale-95 whitespace-nowrap"
                                 >
-                                    Next Lesson
-                                    <ArrowRight size={16} />
-                                </Link>
+                                    {nextItem.kind === "quiz" ? "Next Quiz" : "Next Lesson"}
+                                    {isAdvancing ? (
+                                        <Loader2 size={16} className="animate-spin" />
+                                    ) : (
+                                        <ArrowRight size={16} />
+                                    )}
+                                </button>
                             ) : (
                                 <button
                                     type="button"
@@ -463,7 +513,7 @@ export default function LessonPlayerPage({
                                         {currentLesson.attachments.map((attachment) => (
                                             <a
                                                 key={attachment.id}
-                                                href={attachment.attachment_url}
+                                                href={toAbsoluteAttachmentUrl(attachment.attachment_url)}
                                                 target="_blank"
                                                 rel="noreferrer"
                                                 className="flex items-center justify-between p-4 bg-[#f9f9f9] rounded-2xl hover:-translate-y-0.5 hover:shadow-md transition-all border border-transparent hover:border-[#f3f3f3]"
@@ -494,14 +544,20 @@ export default function LessonPlayerPage({
                                     <p className="text-sm text-[#a0a0a0] leading-relaxed mb-6">
                                         Stay consistent. Complete each lesson to increase your progress and points.
                                     </p>
-                                    {nextLesson ? (
-                                        <Link
-                                            href={`/learn/${course.id}/${nextLesson.id}`}
+                                    {nextItem ? (
+                                        <button
+                                            type="button"
+                                            onClick={handleGoToNextItem}
+                                            disabled={isAdvancing}
                                             className="text-[10px] font-black uppercase tracking-widest text-[#f3184c] flex items-center gap-2 hover:text-white transition-colors bg-white/5 py-3 px-5 rounded-full backdrop-blur-sm border border-white/10 w-fit"
                                         >
-                                            Go to Next Lesson
-                                            <ArrowRight size={14} />
-                                        </Link>
+                                            {nextItem.kind === "quiz" ? "Go to Next Quiz" : "Go to Next Lesson"}
+                                            {isAdvancing ? (
+                                                <Loader2 size={14} className="animate-spin" />
+                                            ) : (
+                                                <ArrowRight size={14} />
+                                            )}
+                                        </button>
                                     ) : (
                                         <span className="text-[10px] font-black uppercase tracking-widest text-white/70 bg-white/5 py-3 px-5 rounded-full border border-white/10 inline-flex">
                                             You completed all lessons

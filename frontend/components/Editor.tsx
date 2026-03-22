@@ -49,6 +49,7 @@ function renderBlock(block: any, idx: number): React.ReactNode {
                 </ul>
             );
         }
+        // map -> (lst, i): return lst == 0 ? 'not return' : <li key={i} dangerouslySetInnerHTML={{ __html: item }} />
 
         case "warning":
             return (

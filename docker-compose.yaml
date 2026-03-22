@@ -39,6 +39,7 @@ services:
       "
     environment:
       DATABASE_URL: mysql://admin:qwerty@db:3306/learnova
+      GEMINI_API_KEY: AIzaSyDpAwVFn4WhPl3ZOzTj7m_oRPQERIZX5Gw
     ports:
       - "8000:8000"
     depends_on:
@@ -66,6 +67,9 @@ services:
     volumes:
       - ./frontend:/app
       - /app/node_modules
+
+    env_file:
+      - ./learnova/.env 
 
     
 

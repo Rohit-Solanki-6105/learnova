@@ -120,7 +120,7 @@ export default function RegisterPage() {
                 </div>
 
                 {/* Role Selection */}
-                <div className="relative">
+                {/* <div className="relative">
                   <label className="block text-[0.7rem] font-bold uppercase tracking-widest text-[#ba0035] mb-2 ml-4">Academic Role</label>
                   <select
                     value={role}
@@ -134,7 +134,7 @@ export default function RegisterPage() {
                   <div className="absolute right-4 top-[70%] -translate-y-1/2 pointer-events-none text-[#5d5f5e]/60">
                     <ChevronDown size={20} />
                   </div>
-                </div>
+                </div> */}
               </div>
 
               {/* Primary Action */}

@@ -1,4 +1,4 @@
-const API_URL = 'http://localhost:8000/api';
+export const API_URL = 'http://localhost:8000/api';
 
 export const setTokens = (access: string, refresh: string) => {
   if (typeof window !== 'undefined') {
@@ -23,18 +23,21 @@ export const getAccessToken = () => {
 
 export const fetchWithAuth = async (url: string, options: RequestInit = {}) => {
   const token = getAccessToken();
-  const headers = {
-    'Content-Type': 'application/json',
-    ...options.headers,
-  };
+  const isFormDataBody =
+    typeof FormData !== 'undefined' && options.body instanceof FormData;
+
+  const normalizedHeaders = new Headers(options.headers);
+  if (!isFormDataBody && !normalizedHeaders.has('Content-Type')) {
+    normalizedHeaders.set('Content-Type', 'application/json');
+  }
   
   if (token) {
-    (headers as any)['Authorization'] = `Bearer ${token}`;
+    normalizedHeaders.set('Authorization', `Bearer ${token}`);
   }
 
   const response = await fetch(`${API_URL}${url}`, {
     ...options,
-    headers,
+    headers: normalizedHeaders,
   });
 
   if (response.status === 401) {

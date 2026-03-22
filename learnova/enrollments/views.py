@@ -1,13 +1,53 @@
 from rest_framework import viewsets, permissions, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from django.utils import timezone
 from django.db.models import Count, Q
+from courses.models import Lesson
+from quizzes.models import Quiz
 from .models import Enrollment, UserProgress, UserQuizAttempt, UserLessonStat, UserPointsHistory
 from .serializers import (
     EnrollmentSerializer, EnrollmentDetailSerializer,
     UserProgressSerializer, UserQuizAttemptSerializer,
     UserLessonStatSerializer, UserPointsHistorySerializer
 )
+
+
+def sync_enrollment_status(user, course):
+    enrollment = Enrollment.objects.filter(user=user, course=course).first()
+    if not enrollment:
+        return
+
+    total_lessons = course.lessons.count()
+    total_quizzes = course.quizzes.count()
+    total_items = total_lessons + total_quizzes
+
+    completed_lessons = UserProgress.objects.filter(
+        user=user,
+        lesson__course=course,
+        status=1,
+    ).count()
+    attempted_quizzes = UserQuizAttempt.objects.filter(
+        user=user,
+        quiz__course=course,
+    ).values('quiz_id').distinct().count()
+
+    completed_items = completed_lessons + attempted_quizzes
+
+    if total_items > 0 and completed_items >= total_items:
+        new_status = 3
+    elif completed_items > 0:
+        new_status = 2
+    else:
+        new_status = 1
+
+    enrollment.status = new_status
+    if new_status == 3:
+        if enrollment.completed_at is None:
+            enrollment.completed_at = timezone.now()
+    else:
+        enrollment.completed_at = None
+    enrollment.save(update_fields=['status', 'completed_at', 'updated_at'])
 
 
 class EnrollmentViewSet(viewsets.ModelViewSet):
@@ -96,6 +136,46 @@ class UserProgressViewSet(viewsets.ModelViewSet):
             qs = qs.filter(lesson__course_id=course_id)
         return qs
 
+    @action(detail=False, methods=['post'], url_path='mark-complete')
+    def mark_complete(self, request):
+        lesson_id = request.data.get('lesson')
+        if not lesson_id:
+            return Response({'error': 'lesson field is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            lesson_id = int(lesson_id)
+        except (TypeError, ValueError):
+            return Response({'error': 'lesson must be an integer'}, status=status.HTTP_400_BAD_REQUEST)
+        if not Lesson.objects.filter(id=lesson_id).exists():
+            return Response({'error': 'lesson not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        progress = (
+            UserProgress.objects
+            .select_related('lesson', 'lesson__course')
+            .filter(user=request.user, lesson_id=lesson_id)
+            .order_by('-updated_at')
+            .first()
+        )
+
+        now = timezone.now()
+        if progress is None:
+            progress = UserProgress.objects.create(
+                user=request.user,
+                lesson_id=lesson_id,
+                status=1,
+                completed_at=now,
+            )
+        else:
+            progress.status = 1
+            progress.completed_at = progress.completed_at or now
+            progress.save(update_fields=['status', 'completed_at', 'updated_at'])
+
+        if progress.lesson and progress.lesson.course:
+            sync_enrollment_status(request.user, progress.lesson.course)
+
+        serializer = self.get_serializer(progress)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
 
 class UserQuizAttemptViewSet(viewsets.ModelViewSet):
     serializer_class = UserQuizAttemptSerializer
@@ -113,6 +193,49 @@ class UserQuizAttemptViewSet(viewsets.ModelViewSet):
         if course_id:
             qs = qs.filter(quiz__course_id=course_id)
         return qs.order_by('-created_at')
+
+    @action(detail=False, methods=['post'], url_path='mark-attempted')
+    def mark_attempted(self, request):
+        quiz_id = request.data.get('quiz')
+        if not quiz_id:
+            return Response({'error': 'quiz field is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            quiz_id = int(quiz_id)
+        except (TypeError, ValueError):
+            return Response({'error': 'quiz must be an integer'}, status=status.HTTP_400_BAD_REQUEST)
+        if not Quiz.objects.filter(id=quiz_id).exists():
+            return Response({'error': 'quiz not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        submitted_ans_data = request.data.get('submitted_ans_data')
+        now = timezone.now()
+
+        attempt = (
+            UserQuizAttempt.objects
+            .select_related('quiz', 'quiz__course')
+            .filter(user=request.user, quiz_id=quiz_id)
+            .order_by('-updated_at')
+            .first()
+        )
+
+        if attempt is None:
+            attempt = UserQuizAttempt.objects.create(
+                user=request.user,
+                quiz_id=quiz_id,
+                submitted_ans_data=submitted_ans_data if submitted_ans_data is not None else {},
+                completed_at=now,
+            )
+        else:
+            if submitted_ans_data is not None:
+                attempt.submitted_ans_data = submitted_ans_data
+            attempt.completed_at = attempt.completed_at or now
+            attempt.save(update_fields=['submitted_ans_data', 'completed_at', 'updated_at'])
+
+        if attempt.quiz and attempt.quiz.course:
+            sync_enrollment_status(request.user, attempt.quiz.course)
+
+        serializer = self.get_serializer(attempt)
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
 
 class UserLessonStatViewSet(viewsets.ModelViewSet):

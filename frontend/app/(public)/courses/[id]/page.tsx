@@ -9,10 +9,7 @@ import {
     BarChart,
     BookOpen,
     CheckCircle2,
-    ChevronDown,
     ChevronRight,
-    Circle,
-    CircleDot,
     Clock,
     Eye,
     FolderOpen,
@@ -30,6 +27,14 @@ import {
 import { useAuth } from "@/context/AuthContext";
 import { Navbar } from "@/components/Navbar";
 import { fetchWithAuth } from "@/lib/auth";
+import {
+    buildLearningItems,
+    calculateCourseProgress,
+    type LearningCourse,
+    type LearningItem,
+    type UserProgressEntry,
+    type UserQuizAttemptEntry,
+} from "@/lib/learning";
 
 /* ─────────────────────────────────────────
    Types
@@ -64,6 +69,16 @@ interface CourseDetail {
         id: number;
         sequence?: number;
         title?: string;
+        duration?: number;
+        data?: unknown;
+    }>;
+    quizzes?: Array<{
+        id: number;
+        sequence?: number;
+        title?: string;
+        description?: string;
+        duration?: number;
+        data?: unknown;
     }>;
     created_by: UserRef;
     responsible: UserRef;
@@ -122,6 +137,13 @@ function getNameFromUserRef(ref: UserRef): string | null {
     return null;
 }
 
+function getLearningItemHref(courseId: number, item: LearningItem): string {
+    if (item.kind === "quiz") {
+        return `/learn/${courseId}/quizzes/${item.id}`;
+    }
+    return `/learn/${courseId}/${item.id}`;
+}
+
 /* ─────────────────────────────────────────
    Component
 ───────────────────────────────────────── */
@@ -144,20 +166,61 @@ export default function CourseDetailPage({
     const [error, setError] = useState<string | null>(null);
     const [isEnrolled, setIsEnrolled] = useState(false);
     const [enrolling, setEnrolling] = useState(false);
+    const [progressEntries, setProgressEntries] = useState<UserProgressEntry[]>([]);
+    const [quizAttempts, setQuizAttempts] = useState<UserQuizAttemptEntry[]>([]);
 
-    const firstLessonId = useMemo(() => {
-        if (!course?.lessons || course.lessons.length === 0) return null;
-        const sorted = [...course.lessons].sort(
-            (a, b) => (a.sequence ?? 0) - (b.sequence ?? 0)
-        );
-        return sorted[0]?.id ?? null;
+    const learningCourse = useMemo<LearningCourse | null>(() => {
+        if (!course) return null;
+        return {
+            id: course.id,
+            title: course.title,
+            description: course.description,
+            lessons: (course.lessons ?? []).map((lesson) => ({
+                id: lesson.id,
+                title: lesson.title ?? `Lesson ${lesson.sequence ?? 0}`,
+                sequence: lesson.sequence ?? 0,
+                duration: lesson.duration ?? 0,
+                data: lesson.data ?? null,
+            })),
+            quizzes: (course.quizzes ?? []).map((quiz) => ({
+                id: quiz.id,
+                title: quiz.title ?? `Quiz ${quiz.sequence ?? 0}`,
+                description: quiz.description ?? "",
+                sequence: quiz.sequence ?? 0,
+                duration: quiz.duration ?? 0,
+                data: quiz.data ?? null,
+            })),
+        };
     }, [course]);
 
+    const learningItems = useMemo(() => {
+        if (!learningCourse) return [];
+        return buildLearningItems(learningCourse);
+    }, [learningCourse]);
+
+    const progressSummary = useMemo(() => {
+        if (!learningCourse) {
+            return {
+                percent: 0,
+                totalItems: 0,
+                completedItems: 0,
+                completedLessonIds: new Set<number>(),
+                attemptedQuizIds: new Set<number>(),
+            };
+        }
+        return calculateCourseProgress(learningCourse, progressEntries, quizAttempts);
+    }, [learningCourse, progressEntries, quizAttempts]);
+
     const learnerContinuePath = useMemo(() => {
-        if (!course) return "/my-courses";
-        if (!firstLessonId) return "/my-courses";
-        return `/learn/${course.id}/${firstLessonId}`;
-    }, [course, firstLessonId]);
+        if (!course || learningItems.length === 0) return "/my-courses";
+        const nextUnfinished = learningItems.find((item) =>
+            item.kind === "lesson"
+                ? !progressSummary.completedLessonIds.has(item.id)
+                : !progressSummary.attemptedQuizIds.has(item.id)
+        );
+        const targetItem = nextUnfinished ?? learningItems[0];
+        return getLearningItemHref(course.id, targetItem);
+    }, [course, learningItems, progressSummary]);
 
     /* ── Data Fetching ── */
     useEffect(() => {
@@ -175,9 +238,20 @@ export default function CourseDetailPage({
                     throw new Error(`Failed to load course (${courseRes.status})`);
                 }
 
-                const courseData = (await courseRes.json()) as CourseDetail;
+                const rawCourseData = (await courseRes.json()) as CourseDetail;
+                const courseData: CourseDetail = {
+                    ...rawCourseData,
+                    lessons: Array.isArray(rawCourseData.lessons)
+                        ? rawCourseData.lessons
+                        : [],
+                    quizzes: Array.isArray(rawCourseData.quizzes)
+                        ? rawCourseData.quizzes
+                        : [],
+                };
                 if (!isMounted) return;
                 setCourse(courseData);
+                setProgressEntries([]);
+                setQuizAttempts([]);
 
                 // Resolve instructor name
                 const resolvedName =
@@ -217,21 +291,46 @@ export default function CourseDetailPage({
                     if (enrollRes.ok) {
                         const enrollments =
                             (await enrollRes.json()) as Enrollment[];
+                        const enrolled =
+                            Array.isArray(enrollments) &&
+                            enrollments.some(
+                                (e) => Number(e.course) === Number(courseId)
+                            );
                         if (isMounted) {
-                            setIsEnrolled(
-                                Array.isArray(enrollments) &&
-                                    enrollments.some(
-                                        (e) =>
-                                            Number(e.course) ===
-                                            Number(courseId)
-                                    )
+                            setIsEnrolled(enrolled);
+                        }
+
+                        if (enrolled) {
+                            const [progressRes, attemptsRes] = await Promise.all([
+                                fetchWithAuth(
+                                    `/user-progress/?course=${courseId}&user=${userId}`
+                                ),
+                                fetchWithAuth(
+                                    `/quiz-attempts/?course=${courseId}&user=${userId}`
+                                ),
+                            ]);
+
+                            if (!isMounted) return;
+                            setProgressEntries(
+                                progressRes.ok
+                                    ? ((await progressRes.json()) as UserProgressEntry[])
+                                    : []
+                            );
+                            setQuizAttempts(
+                                attemptsRes.ok
+                                    ? ((await attemptsRes.json()) as UserQuizAttemptEntry[])
+                                    : []
                             );
                         }
                     } else if (isMounted) {
                         setIsEnrolled(false);
+                        setProgressEntries([]);
+                        setQuizAttempts([]);
                     }
                 } else if (isMounted) {
                     setIsEnrolled(false);
+                    setProgressEntries([]);
+                    setQuizAttempts([]);
                 }
             } catch (err: unknown) {
                 if (isMounted) {
@@ -290,8 +389,8 @@ export default function CourseDetailPage({
             }
 
             setIsEnrolled(true);
-            if (course?.id && firstLessonId) {
-                router.push(`/learn/${course.id}/${firstLessonId}`);
+            if (course?.id && learningItems.length > 0) {
+                router.push(learnerContinuePath);
             } else {
                 router.push("/my-courses");
             }
@@ -502,14 +601,23 @@ export default function CourseDetailPage({
                                         </span>
                                     </div>
                                     <div className="h-4 w-full bg-[#e8e8e8] rounded-full overflow-hidden">
-                                        <div className="h-full bg-[#f3184c] rounded-full w-[65%] shadow-[0_0_15px_rgba(243,24,76,0.3)]" />
+                                        <div
+                                            className="h-full bg-[#f3184c] rounded-full shadow-[0_0_15px_rgba(243,24,76,0.3)] transition-all"
+                                            style={{ width: `${progressSummary.percent}%` }}
+                                        />
                                     </div>
                                 </div>
                                 <div className="text-right whitespace-nowrap hidden md:block border-l border-[#e8e8e8] pl-8 relative z-10">
                                     <p className="text-[#5f5e5e] text-sm mb-1">
-                                        Total Lessons:{" "}
+                                        Completed:{" "}
                                         <span className="font-bold text-[#1a1c1c]">
-                                            {course.total_lesson}
+                                            {progressSummary.completedItems}/{progressSummary.totalItems}
+                                        </span>
+                                    </p>
+                                    <p className="text-[#5f5e5e] text-sm">
+                                        Progress:{" "}
+                                        <span className="font-bold text-[#1a1c1c]">
+                                            {progressSummary.percent}%
                                         </span>
                                     </p>
                                     <p className="text-[10px] font-bold mt-2 text-[#f3184c] uppercase tracking-wider">
@@ -589,7 +697,7 @@ export default function CourseDetailPage({
                                     Course Content
                                 </h2>
                                 <span className="bg-[#e2e2e2] px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-tight text-[#1a1c1c]">
-                                    {course.total_lesson} lessons total
+                                    {learningItems.length} learning steps
                                 </span>
                             </div>
                             <div className="relative w-full sm:w-72">
@@ -605,162 +713,109 @@ export default function CourseDetailPage({
                             </div>
                         </div>
 
-                        {/* Module Accordion */}
+                        {/* Learning Path */}
                         <div className="space-y-4">
-
-                            {/* Module 1 — always open */}
                             <div className="bg-[#f3f3f3] md:bg-white md:border md:border-[#f3f3f3] rounded-[1.5rem] overflow-hidden">
-                                <div className="flex items-center justify-between p-6 cursor-pointer hover:bg-[#f3f3f3] transition-colors">
+                                <div className="flex items-center justify-between p-6">
                                     <div className="flex items-center gap-5">
                                         <span className="w-10 h-10 flex items-center justify-center bg-[#f3184c] text-white rounded-xl text-sm font-bold shadow-md shadow-rose-200">
-                                            01
+                                            LP
                                         </span>
                                         <h3 className="font-bold text-lg text-[#1a1c1c]">
-                                            Module 1
+                                            Learning Path
                                         </h3>
                                     </div>
-                                    <ChevronDown
-                                        className="text-[#1a1c1c]"
-                                        size={20}
-                                    />
+                                    <span className="text-[10px] font-black uppercase tracking-widest text-[#5f5e5e]">
+                                        Lessons + Quizzes
+                                    </span>
                                 </div>
 
                                 <div className="px-6 pb-6 pt-2 space-y-2">
-                                    {/* Lesson — free preview */}
-                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between py-4 px-5 hover:bg-white rounded-2xl transition-all group border border-transparent hover:border-[#e8e8e8] shadow-sm cursor-pointer">
-                                        <div className="flex items-center gap-4 mb-3 sm:mb-0">
-                                            <div className="w-8 h-8 rounded-full bg-rose-50 flex items-center justify-center shrink-0">
-                                                {isEnrolled ? (
-                                                    <CheckCircle2
-                                                        className="text-[#f3184c]"
-                                                        size={18}
-                                                    />
-                                                ) : (
-                                                    <Unlock
-                                                        className="text-[#f3184c]"
-                                                        size={16}
-                                                    />
-                                                )}
-                                            </div>
-                                            <span className="text-sm font-medium text-[#1a1c1c]">
-                                                Lesson 1 — Introduction
-                                            </span>
-                                            {!isEnrolled && (
-                                                <span className="text-[10px] font-black uppercase text-white bg-[#5f5e5e] px-2 py-0.5 rounded shadow-sm opacity-60">
-                                                    Preview
-                                                </span>
-                                            )}
-                                        </div>
-                                        <div className="flex items-center gap-4 ml-12 sm:ml-0">
-                                            <span className="text-xs text-[#5f5e5e] font-mono tracking-tighter bg-[#f9f9f9] px-2 py-1 rounded-md border border-[#e8e8e8]">
-                                                12:45
-                                            </span>
-                                            <PlayCircle
-                                                className="text-[#f3184c] opacity-80 group-hover:opacity-100 transition-opacity"
-                                                size={20}
-                                            />
-                                        </div>
-                                    </div>
+                                    {learningItems.length === 0 ? (
+                                        <p className="text-sm text-[#5f5e5e] px-5 py-3">
+                                            No lessons or quizzes are available for this course yet.
+                                        </p>
+                                    ) : (
+                                        learningItems.map((item) => {
+                                            const isCompleted =
+                                                item.kind === "lesson"
+                                                    ? progressSummary.completedLessonIds.has(item.id)
+                                                    : progressSummary.attemptedQuizIds.has(item.id);
+                                            const isLocked = !isEnrolled;
+                                            const isClickable = isEnrolled;
 
-                                    {/* Lesson 2 */}
-                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between py-4 px-5 hover:bg-white rounded-2xl transition-all group border border-transparent hover:border-[#e8e8e8] cursor-pointer">
-                                        <div className="flex items-center gap-4 mb-3 sm:mb-0">
-                                            <div className="w-8 h-8 rounded-full bg-[#e8e8e8] flex items-center justify-center shrink-0">
-                                                {isEnrolled ? (
-                                                    <Circle
-                                                        className="text-[#5f5e5e]"
-                                                        size={16}
-                                                    />
-                                                ) : (
-                                                    <Lock
-                                                        className="text-[#a0a0a0]"
-                                                        size={16}
-                                                    />
-                                                )}
-                                            </div>
-                                            <span
-                                                className={`text-sm font-medium ${isEnrolled ? "text-[#1a1c1c]" : "text-[#a0a0a0]"}`}
-                                            >
-                                                Lesson 2 — Core Concepts
-                                            </span>
-                                        </div>
-                                        <div className="flex items-center gap-4 ml-12 sm:ml-0">
-                                            <span className="text-xs text-[#5f5e5e] font-mono tracking-tighter bg-[#f9f9f9] px-2 py-1 rounded-md border border-[#e8e8e8]">
-                                                18:20
-                                            </span>
-                                            {isEnrolled && (
-                                                <PlayCircle
-                                                    className="text-[#5f5e5e] group-hover:text-[#1a1c1c] transition-colors"
-                                                    size={20}
-                                                />
-                                            )}
-                                        </div>
-                                    </div>
+                                            const content = (
+                                                <div
+                                                    className={`flex flex-col sm:flex-row sm:items-center justify-between py-4 px-5 rounded-2xl transition-all group border ${
+                                                        isClickable
+                                                            ? "hover:bg-white hover:border-[#e8e8e8] cursor-pointer border-transparent"
+                                                            : "border-transparent"
+                                                    }`}
+                                                >
+                                                    <div className="flex items-center gap-4 mb-3 sm:mb-0 min-w-0">
+                                                        <div className="w-8 h-8 rounded-full bg-rose-50 flex items-center justify-center shrink-0">
+                                                            {isCompleted ? (
+                                                                <CheckCircle2 className="text-[#f3184c]" size={18} />
+                                                            ) : isLocked ? (
+                                                                <Lock className="text-[#a0a0a0]" size={16} />
+                                                            ) : item.kind === "quiz" ? (
+                                                                <Star className="text-[#f3184c]" size={14} fill="currentColor" />
+                                                            ) : (
+                                                                <PlayCircle className="text-[#f3184c]" size={16} />
+                                                            )}
+                                                        </div>
+                                                        <div className="min-w-0">
+                                                            <p className={`text-sm truncate ${isCompleted ? "font-bold text-[#f3184c]" : "font-medium text-[#1a1c1c]"}`}>
+                                                                {item.kind === "quiz" ? `Quiz: ${item.title}` : item.title}
+                                                            </p>
+                                                            <div className="flex items-center gap-2 mt-1">
+                                                                <span className="text-[10px] uppercase font-black tracking-wider text-[#5f5e5e] bg-[#f3f3f3] px-2 py-0.5 rounded">
+                                                                    {item.kind === "quiz" ? "Assessment" : "Lesson"}
+                                                                </span>
+                                                                {isLocked && (
+                                                                    <span className="text-[10px] uppercase font-black tracking-wider text-[#a0a0a0]">
+                                                                        Locked
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex items-center gap-4 ml-12 sm:ml-0">
+                                                        <span className="text-xs text-[#5f5e5e] font-mono tracking-tighter bg-[#f9f9f9] px-2 py-1 rounded-md border border-[#e8e8e8]">
+                                                            {item.kind === "quiz"
+                                                                ? formatDuration(item.duration)
+                                                                : formatDuration(item.duration)}
+                                                        </span>
+                                                        {!isLocked && (
+                                                            <PlayCircle
+                                                                className="text-[#f3184c] opacity-80 group-hover:opacity-100 transition-opacity"
+                                                                size={18}
+                                                            />
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            );
 
-                                    {/* Lesson 3 — in-progress indicator when enrolled */}
-                                    <div
-                                        className={`flex flex-col sm:flex-row sm:items-center justify-between py-4 px-5 ${isEnrolled ? "bg-rose-50/50 hover:bg-rose-100/50 border border-rose-100" : "hover:bg-white hover:border-[#e8e8e8] border border-transparent"} rounded-2xl transition-all group cursor-pointer`}
-                                    >
-                                        <div className="flex items-center gap-4 mb-3 sm:mb-0">
-                                            <div
-                                                className={`w-8 h-8 rounded-full ${isEnrolled ? "bg-white border border-[#f3184c] shadow-sm" : "bg-[#e8e8e8]"} flex items-center justify-center shrink-0`}
-                                            >
-                                                {isEnrolled ? (
-                                                    <CircleDot
-                                                        className="text-[#f3184c]"
-                                                        size={14}
-                                                    />
-                                                ) : (
-                                                    <Lock
-                                                        className="text-[#a0a0a0]"
-                                                        size={16}
-                                                    />
-                                                )}
-                                            </div>
-                                            <span
-                                                className={`text-sm ${isEnrolled ? "font-bold text-[#f3184c]" : "font-medium text-[#a0a0a0]"}`}
-                                            >
-                                                Lesson 3 — Advanced Topics
-                                            </span>
-                                        </div>
-                                        <div className="flex items-center gap-4 ml-12 sm:ml-0">
-                                            {isEnrolled && (
-                                                <span className="text-[10px] font-black uppercase text-[#f3184c] tracking-widest bg-white px-2 py-1 rounded-md shadow-sm">
-                                                    In Progress
-                                                </span>
-                                            )}
-                                            <span className="text-xs text-[#5f5e5e] font-mono tracking-tighter bg-[#f9f9f9] px-2 py-1 rounded-md border border-[#e8e8e8]">
-                                                24:10
-                                            </span>
-                                            {isEnrolled && (
-                                                <PlayCircle
-                                                    className="text-[#f3184c]"
-                                                    size={20}
-                                                />
-                                            )}
-                                        </div>
-                                    </div>
+                                            if (!isClickable) {
+                                                return (
+                                                    <div key={`${item.kind}-${item.id}`}>
+                                                        {content}
+                                                    </div>
+                                                );
+                                            }
+
+                                            return (
+                                                <Link
+                                                    key={`${item.kind}-${item.id}`}
+                                                    href={getLearningItemHref(course.id, item)}
+                                                >
+                                                    {content}
+                                                </Link>
+                                            );
+                                        })
+                                    )}
                                 </div>
                             </div>
-
-                            {/* Module 2 — collapsed */}
-                            <div className="bg-white border border-[#f3f3f3] rounded-[1.5rem] overflow-hidden opacity-70 hover:opacity-100 transition-opacity">
-                                <div className="flex items-center justify-between p-6 cursor-pointer">
-                                    <div className="flex items-center gap-5">
-                                        <span className="w-10 h-10 flex items-center justify-center bg-[#f3f3f3] text-[#1a1c1c] rounded-xl text-sm font-bold">
-                                            02
-                                        </span>
-                                        <h3 className="font-bold text-lg text-[#1a1c1c]">
-                                            Module 2
-                                        </h3>
-                                    </div>
-                                    <ChevronDown
-                                        className="text-[#1a1c1c] -rotate-90"
-                                        size={20}
-                                    />
-                                </div>
-                            </div>
-
                         </div>
                     </section>
 

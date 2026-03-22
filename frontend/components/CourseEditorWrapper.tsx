@@ -5,7 +5,7 @@ import {
     Plus, Eye, EyeOff, Trash2, ArrowLeft, Edit2, X, Save,
     GripVertical, CheckCircle2, Archive, Globe, Lock,
     BookOpen, HelpCircle, Loader2, ImageIcon, ChevronDown,
-    AlertCircle, Users
+    AlertCircle, Users, Paperclip, Upload, Link2
 } from "lucide-react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
@@ -14,6 +14,7 @@ import TextEditor from "@/components/TextEditor";
 import LearnovaQuiz, { QuizData } from "@/components/Quiz";
 import TagsInput, { Tag } from "@/components/TagsInput";
 import { fetchWithAuth } from "@/lib/auth";
+import { AttachmentItem, toAbsoluteAttachmentUrl } from "@/lib/attachments";
 
 const LessonEditor = dynamic(() => import("@/components/Editor"), { ssr: false });
 
@@ -27,6 +28,7 @@ interface LessonData {
     data: any;              // EditorJS JSON
     course: number;
     duration: number;       // minutes
+    attachments?: AttachmentItem[];
 }
 
 interface QuizFromApi {
@@ -686,6 +688,154 @@ function LessonEditView({ lesson, onClose }: { lesson: LessonData; onClose: () =
     );
     const [saving, setSaving] = useState(false);
     const [preview, setPreview] = useState(false);
+    const [attachments, setAttachments] = useState<AttachmentItem[]>(lesson.attachments ?? []);
+    const [uploadingAttachment, setUploadingAttachment] = useState(false);
+    const [addingLink, setAddingLink] = useState(false);
+    const [deletingAttachmentId, setDeletingAttachmentId] = useState<number | null>(null);
+    const [linkName, setLinkName] = useState("");
+    const [linkUrl, setLinkUrl] = useState("");
+
+    const refreshAttachments = useCallback(async () => {
+        try {
+            const res = await fetchWithAuth(`/attachments/?lesson=${lesson.id}`);
+            if (!res.ok) return;
+            const data = await res.json();
+            setAttachments(Array.isArray(data) ? data : []);
+        } catch {
+            // Keep lesson editor usable even if attachments query fails.
+        }
+    }, [lesson.id]);
+
+    useEffect(() => {
+        if (lesson.attachments) {
+            setAttachments(lesson.attachments);
+            return;
+        }
+        refreshAttachments();
+    }, [lesson.attachments, refreshAttachments]);
+
+    const createAttachment = async (payload: {
+        attachment_name: string;
+        attachment_url: string;
+        attachment_type: number;
+    }) => {
+        const res = await fetchWithAuth("/attachments/", {
+            method: "POST",
+            body: JSON.stringify({
+                lesson: lesson.id,
+                ...payload,
+            }),
+        });
+        if (!res.ok) {
+            const errMsg = await extractApiErrorMessage(res);
+            throw new Error(errMsg);
+        }
+        const created: AttachmentItem = await res.json();
+        setAttachments((prev) => [...prev, created]);
+        return created;
+    };
+
+    const handleUploadAttachmentFile = async (
+        event: React.ChangeEvent<HTMLInputElement>
+    ) => {
+        const file = event.target.files?.[0];
+        if (!file) return;
+
+        setUploadingAttachment(true);
+        try {
+            const formData = new FormData();
+            formData.append("file", file);
+
+            const uploadRes = await fetchWithAuth("/attachments/upload/", {
+                method: "POST",
+                body: formData,
+            });
+            if (!uploadRes.ok) {
+                const errMsg = await extractApiErrorMessage(uploadRes);
+                throw new Error(errMsg);
+            }
+
+            const uploadPayload = (await uploadRes.json()) as {
+                url: string;
+                name?: string;
+            };
+
+            await createAttachment({
+                attachment_name: uploadPayload.name || file.name,
+                attachment_url: uploadPayload.url,
+                attachment_type: 1,
+            });
+            toast.success("File attachment added.");
+        } catch (err: unknown) {
+            const msg = err instanceof Error ? err.message : "Upload failed";
+            toast.error(`Failed to upload file: ${msg}`);
+        } finally {
+            setUploadingAttachment(false);
+            event.target.value = "";
+        }
+    };
+
+    const handleAddLinkAttachment = async () => {
+        const name = linkName.trim();
+        if (!name) {
+            toast.error("Please add an attachment name.");
+            return;
+        }
+
+        let normalizedUrl = linkUrl.trim();
+        if (!normalizedUrl) {
+            toast.error("Please add a link URL.");
+            return;
+        }
+        if (!/^https?:\/\//i.test(normalizedUrl)) {
+            normalizedUrl = `https://${normalizedUrl}`;
+        }
+
+        try {
+            // Validate URL format before saving.
+            new URL(normalizedUrl);
+        } catch {
+            toast.error("Please add a valid URL.");
+            return;
+        }
+
+        setAddingLink(true);
+        try {
+            await createAttachment({
+                attachment_name: name,
+                attachment_url: normalizedUrl,
+                attachment_type: 2,
+            });
+            setLinkName("");
+            setLinkUrl("");
+            toast.success("Link attachment added.");
+        } catch (err: unknown) {
+            const msg = err instanceof Error ? err.message : "Save failed";
+            toast.error(`Failed to add link: ${msg}`);
+        } finally {
+            setAddingLink(false);
+        }
+    };
+
+    const handleDeleteAttachment = async (attachmentId: number) => {
+        setDeletingAttachmentId(attachmentId);
+        try {
+            const res = await fetchWithAuth(`/attachments/${attachmentId}/`, {
+                method: "DELETE",
+            });
+            if (!(res.ok || res.status === 204)) {
+                const errMsg = await extractApiErrorMessage(res);
+                throw new Error(errMsg);
+            }
+            setAttachments((prev) => prev.filter((item) => item.id !== attachmentId));
+            toast.success("Attachment removed.");
+        } catch (err: unknown) {
+            const msg = err instanceof Error ? err.message : "Delete failed";
+            toast.error(`Failed to delete attachment: ${msg}`);
+        } finally {
+            setDeletingAttachmentId(null);
+        }
+    };
 
     const handleSave = async () => {
         setSaving(true);
@@ -767,6 +917,35 @@ function LessonEditView({ lesson, onClose }: { lesson: LessonData; onClose: () =
                                 />
                             </div>
                         </div>
+
+                        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+                            <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
+                                <Paperclip size={16} className="text-indigo-500" />
+                                Lesson Attachments
+                            </h3>
+                            {attachments.length > 0 ? (
+                                <div className="space-y-2">
+                                    {attachments.map((attachment) => (
+                                        <a
+                                            key={attachment.id}
+                                            href={toAbsoluteAttachmentUrl(attachment.attachment_url)}
+                                            target="_blank"
+                                            rel="noreferrer"
+                                            className="flex items-center justify-between p-3 rounded-xl border border-gray-100 hover:bg-gray-50 transition-colors"
+                                        >
+                                            <span className="text-sm font-semibold text-gray-800 truncate">
+                                                {attachment.attachment_name}
+                                            </span>
+                                            <span className="text-[11px] text-gray-500 uppercase tracking-wider">
+                                                {attachment.attachment_type === 2 ? "Link" : "File"}
+                                            </span>
+                                        </a>
+                                    ))}
+                                </div>
+                            ) : (
+                                <p className="text-sm text-gray-500">No attachments added yet.</p>
+                            )}
+                        </div>
                     </div>
                 ) : (
                     // Edit mode
@@ -803,6 +982,127 @@ function LessonEditView({ lesson, onClose }: { lesson: LessonData; onClose: () =
                             </div>
                             <div className="p-2">
                                 <LessonEditor is_editting={true} file={editorData} setFile={setEditorData} />
+                            </div>
+                        </div>
+
+                        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+                            <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+                                <h3 className="font-bold text-gray-800 flex items-center gap-2">
+                                    <Paperclip size={16} className="text-indigo-500" />
+                                    Lesson Attachments
+                                </h3>
+                                <span className="text-xs font-bold text-indigo-600 bg-indigo-50 px-3 py-1 rounded-full">
+                                    {attachments.length} linked
+                                </span>
+                            </div>
+
+                            <div className="p-6 space-y-6">
+                                <div className="border border-dashed border-indigo-200 rounded-xl p-4 bg-indigo-50/40">
+                                    <div className="flex items-center justify-between gap-4">
+                                        <div>
+                                            <p className="text-sm font-semibold text-gray-800">Upload file</p>
+                                            <p className="text-xs text-gray-500 mt-0.5">
+                                                PDFs, docs, images, and supplementary files.
+                                            </p>
+                                        </div>
+                                        <label className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 text-white text-sm font-semibold cursor-pointer hover:bg-indigo-700 transition-colors">
+                                            {uploadingAttachment ? (
+                                                <Loader2 size={14} className="animate-spin" />
+                                            ) : (
+                                                <Upload size={14} />
+                                            )}
+                                            {uploadingAttachment ? "Uploading..." : "Upload File"}
+                                            <input
+                                                type="file"
+                                                className="hidden"
+                                                onChange={handleUploadAttachmentFile}
+                                                disabled={uploadingAttachment}
+                                            />
+                                        </label>
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                    <div className="md:col-span-1">
+                                        <label className="block text-xs font-bold text-gray-400 mb-2 tracking-widest uppercase">
+                                            Link Name
+                                        </label>
+                                        <input
+                                            type="text"
+                                            value={linkName}
+                                            onChange={(e) => setLinkName(e.target.value)}
+                                            placeholder="e.g. Reference Guide"
+                                            className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
+                                        />
+                                    </div>
+                                    <div className="md:col-span-2">
+                                        <label className="block text-xs font-bold text-gray-400 mb-2 tracking-widest uppercase">
+                                            External URL
+                                        </label>
+                                        <div className="flex gap-2">
+                                            <div className="relative flex-1">
+                                                <Link2 size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                                                <input
+                                                    type="text"
+                                                    value={linkUrl}
+                                                    onChange={(e) => setLinkUrl(e.target.value)}
+                                                    placeholder="https://example.com/resource"
+                                                    className="w-full pl-9 pr-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
+                                                />
+                                            </div>
+                                            <button
+                                                type="button"
+                                                onClick={handleAddLinkAttachment}
+                                                disabled={addingLink}
+                                                className="px-4 py-2.5 rounded-xl bg-gray-900 text-white text-sm font-semibold hover:bg-black transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                                            >
+                                                {addingLink ? "Adding..." : "Add Link"}
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {attachments.length > 0 ? (
+                                    <div className="space-y-2">
+                                        {attachments.map((attachment) => (
+                                            <div
+                                                key={attachment.id}
+                                                className="flex items-center justify-between gap-3 p-3 rounded-xl border border-gray-100 bg-white"
+                                            >
+                                                <a
+                                                    href={toAbsoluteAttachmentUrl(attachment.attachment_url)}
+                                                    target="_blank"
+                                                    rel="noreferrer"
+                                                    className="min-w-0 flex-1"
+                                                >
+                                                    <span className="block text-sm font-semibold text-gray-800 truncate">
+                                                        {attachment.attachment_name}
+                                                    </span>
+                                                    <span className="text-xs text-gray-500">
+                                                        {attachment.attachment_type === 2 ? "External link" : "Download file"}
+                                                    </span>
+                                                </a>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleDeleteAttachment(attachment.id)}
+                                                    disabled={deletingAttachmentId === attachment.id}
+                                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-red-600 hover:bg-red-50 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                                                >
+                                                    {deletingAttachmentId === attachment.id ? (
+                                                        <Loader2 size={12} className="animate-spin" />
+                                                    ) : (
+                                                        <Trash2 size={12} />
+                                                    )}
+                                                    Remove
+                                                </button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <p className="text-sm text-gray-500">
+                                        No attachments added yet.
+                                    </p>
+                                )}
                             </div>
                         </div>
                     </>
