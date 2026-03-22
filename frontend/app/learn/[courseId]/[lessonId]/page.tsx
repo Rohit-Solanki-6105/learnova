@@ -1,301 +1,518 @@
 "use client";
 
-import React, { use } from "react";
+import React, { use, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
-    Menu,
+    AlertCircle,
     ArrowLeft,
-    CheckCircle2,
-    PlayCircle,
-    Lock,
-    Circle,
-    MessageSquare,
-    Download,
     ArrowRight,
-    SquareDashed,
-    LayoutTemplate,
-    FileText,
-    Link as LinkIcon,
-    MessageCircle
+    CheckCircle2,
+    Circle,
+    Download,
+    Loader2,
+    PlayCircle,
 } from "lucide-react";
+
 import { BlocksViewer } from "@/components/Editor";
 import { LessonVideoPlayer } from "@/components/LessonVideoPlayer";
+import { fetchWithAuth } from "@/lib/auth";
 
-const MOCK_LESSON_CONTENT = {
-    time: 1711100000000,
-    blocks: [
-        {
-            id: "desc-1",
-            type: "header",
-            data: { text: "About this lesson", level: 2 }
-        },
-        {
-            id: "desc-2",
-            type: "paragraph",
-            data: { text: "In this module, we explore how to break the traditional grid while maintaining structural integrity. We’ll dive deep into the principles of <strong>Curated Chaos</strong> and how leading design boutiques use intentional misalignment to create rhythm and brand authority in editorial interfaces." }
-        },
-        {
-            id: "desc-3",
-            type: "list",
-            data: {
-                style: "unordered",
-                items: [
-                    "Understanding mathematical perfection in asymmetrical layouts.",
-                    "Using negative space as a primary design element to guide user focus.",
-                    "Balancing heavy typography with minimalist structural boundaries."
-                ]
-            }
-        },
-        {
-            id: "desc-4",
-            type: "warning",
-            data: { title: "Important Assignment", message: "Make sure to download the Grid Guidelines PDF before jumping into the Figma template." }
+interface Attachment {
+    id: number;
+    attachment_name: string;
+    attachment_url: string;
+    attachment_type: number;
+}
+
+interface Lesson {
+    id: number;
+    title: string;
+    sequence: number;
+    duration: number;
+    data: unknown;
+    attachments?: Attachment[];
+}
+
+interface CourseDetail {
+    id: number;
+    title: string;
+    description: string;
+    lessons: Lesson[];
+}
+
+interface Enrollment {
+    id: number;
+    course: number;
+    user: number;
+    status: number;
+}
+
+interface UserProgress {
+    id: number;
+    lesson: number;
+    status: number;
+}
+
+interface EditorBlock {
+    id?: string;
+    type: string;
+    data: Record<string, unknown>;
+}
+
+interface EditorData {
+    time: number;
+    blocks: EditorBlock[];
+    version: string;
+}
+
+const FALLBACK_VIDEO_SRC =
+    "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4";
+
+function formatDuration(minutes: number): string {
+    if (!minutes) return "0m";
+    if (minutes >= 60) return `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
+    return `${minutes}m`;
+}
+
+function normalizeEditorData(data: unknown): EditorData {
+    if (
+        data &&
+        typeof data === "object" &&
+        Array.isArray((data as { blocks?: unknown[] }).blocks)
+    ) {
+        return data as EditorData;
+    }
+
+    if (typeof data === "string" && data.trim()) {
+        return {
+            time: Date.now(),
+            version: "2.30.0",
+            blocks: [
+                {
+                    type: "paragraph",
+                    data: { text: data.trim() },
+                },
+            ],
+        };
+    }
+
+    if (
+        data &&
+        typeof data === "object" &&
+        typeof (data as { description?: unknown }).description === "string"
+    ) {
+        const description = (data as { description: string }).description.trim();
+        if (description) {
+            return {
+                time: Date.now(),
+                version: "2.30.0",
+                blocks: [
+                    {
+                        type: "paragraph",
+                        data: { text: description },
+                    },
+                ],
+            };
         }
-    ],
-    version: "2.30.0"
-};
+    }
 
-export default function LessonPlayerPage({ params }: { params: Promise<{ courseId: string, lessonId: string }> }) {
+    return {
+        time: Date.now(),
+        version: "2.30.0",
+        blocks: [],
+    };
+}
+
+function extractMp4FromLessonData(data: unknown): string {
+    if (data && typeof data === "object") {
+        const direct = (data as { videoUrl?: unknown; video_url?: unknown }).videoUrl;
+        if (typeof direct === "string" && /\.mp4($|\?)/i.test(direct)) {
+            return direct;
+        }
+
+        const directAlt = (data as { video_url?: unknown }).video_url;
+        if (typeof directAlt === "string" && /\.mp4($|\?)/i.test(directAlt)) {
+            return directAlt;
+        }
+
+        const blocks = (data as { blocks?: unknown[] }).blocks;
+        if (Array.isArray(blocks)) {
+            for (const block of blocks) {
+                if (!block || typeof block !== "object") continue;
+                const typedBlock = block as {
+                    type?: string;
+                    data?: { url?: unknown; embed?: unknown };
+                };
+                const candidate =
+                    typeof typedBlock.data?.url === "string"
+                        ? typedBlock.data.url
+                        : typeof typedBlock.data?.embed === "string"
+                          ? typedBlock.data.embed
+                          : null;
+
+                if (candidate && /\.mp4($|\?)/i.test(candidate)) {
+                    return candidate;
+                }
+            }
+        }
+    }
+
+    return FALLBACK_VIDEO_SRC;
+}
+
+export default function LessonPlayerPage({
+    params,
+}: {
+    params: Promise<{ courseId: string; lessonId: string }>;
+}) {
     const resolvedParams = use(params);
+    const courseId = resolvedParams.courseId;
+    const lessonId = resolvedParams.lessonId;
+
+    const router = useRouter();
+
+    const [course, setCourse] = useState<CourseDetail | null>(null);
+    const [progressEntries, setProgressEntries] = useState<UserProgress[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+
+    useEffect(() => {
+        let isMounted = true;
+
+        const loadData = async () => {
+            try {
+                setLoading(true);
+                setError(null);
+
+                const meRes = await fetchWithAuth("/users/me/");
+                if (!meRes.ok) {
+                    router.replace(
+                        `/login?next=${encodeURIComponent(`/learn/${courseId}/${lessonId}`)}`
+                    );
+                    return;
+                }
+
+                const me = (await meRes.json()) as { id: number; role: number };
+                if (me.role !== 3) {
+                    router.replace("/admin/courses");
+                    return;
+                }
+
+                const [courseRes, enrollRes, progressRes] = await Promise.all([
+                    fetchWithAuth(`/courses/${courseId}/`),
+                    fetchWithAuth(`/enrollments/?course=${courseId}&user=${me.id}`),
+                    fetchWithAuth(`/user-progress/?course=${courseId}&user=${me.id}`),
+                ]);
+
+                if (!courseRes.ok) {
+                    throw new Error(`Failed to load course (${courseRes.status})`);
+                }
+                if (!enrollRes.ok) {
+                    throw new Error(`Failed to validate enrollment (${enrollRes.status})`);
+                }
+
+                const enrollments = (await enrollRes.json()) as Enrollment[];
+                if (!Array.isArray(enrollments) || enrollments.length === 0) {
+                    router.replace(`/courses/${courseId}`);
+                    return;
+                }
+
+                const courseData = (await courseRes.json()) as CourseDetail;
+                const progressData = progressRes.ok
+                    ? ((await progressRes.json()) as UserProgress[])
+                    : [];
+
+                if (!isMounted) return;
+
+                setCourse(courseData);
+                setProgressEntries(Array.isArray(progressData) ? progressData : []);
+            } catch (err: unknown) {
+                if (!isMounted) return;
+                setError(
+                    err instanceof Error
+                        ? err.message
+                        : "Unable to load lesson data."
+                );
+                setCourse(null);
+            } finally {
+                if (isMounted) {
+                    setLoading(false);
+                }
+            }
+        };
+
+        loadData();
+
+        return () => {
+            isMounted = false;
+        };
+    }, [courseId, lessonId, router]);
+
+    const sortedLessons = useMemo(() => {
+        if (!course?.lessons) return [];
+        return [...course.lessons].sort((a, b) => (a.sequence ?? 0) - (b.sequence ?? 0));
+    }, [course]);
+
+    const currentLesson = useMemo(() => {
+        return sortedLessons.find((lesson) => String(lesson.id) === String(lessonId)) ?? null;
+    }, [sortedLessons, lessonId]);
+
+    useEffect(() => {
+        if (!course || sortedLessons.length === 0) return;
+        if (currentLesson) return;
+
+        router.replace(`/learn/${course.id}/${sortedLessons[0].id}`);
+    }, [course, currentLesson, sortedLessons, router]);
+
+    const currentLessonIndex = useMemo(() => {
+        if (!currentLesson) return -1;
+        return sortedLessons.findIndex((lesson) => lesson.id === currentLesson.id);
+    }, [sortedLessons, currentLesson]);
+
+    const nextLesson =
+        currentLessonIndex >= 0 && currentLessonIndex < sortedLessons.length - 1
+            ? sortedLessons[currentLessonIndex + 1]
+            : null;
+
+    const completedLessonIds = useMemo(() => {
+        return new Set(
+            progressEntries
+                .filter((entry) => Number(entry.status) === 1)
+                .map((entry) => Number(entry.lesson))
+        );
+    }, [progressEntries]);
+
+    const completedCount = useMemo(() => {
+        return sortedLessons.filter((lesson) => completedLessonIds.has(lesson.id)).length;
+    }, [sortedLessons, completedLessonIds]);
+
+    const overallProgress =
+        sortedLessons.length > 0
+            ? Math.round((completedCount / sortedLessons.length) * 100)
+            : 0;
+
+    const lessonContent = normalizeEditorData(currentLesson?.data);
+    const lessonVideoSrc = extractMp4FromLessonData(currentLesson?.data);
+
+    if (loading) {
+        return (
+            <div className="min-h-screen bg-[#f9f9f9] flex items-center justify-center">
+                <div className="flex items-center gap-3 text-[#5d5f5e]">
+                    <Loader2 className="animate-spin" size={22} />
+                    <span className="font-medium">Loading lesson...</span>
+                </div>
+            </div>
+        );
+    }
+
+    if (error || !course || !currentLesson) {
+        return (
+            <div className="min-h-screen bg-[#f9f9f9] px-6 py-16 flex items-center justify-center">
+                <div className="max-w-2xl w-full bg-white border border-[#e8e8e8] rounded-3xl p-8 text-center">
+                    <AlertCircle className="mx-auto text-[#f3184c] mb-4" size={34} />
+                    <h1 className="text-2xl font-bold text-[#1a1c1c] mb-2">Lesson unavailable</h1>
+                    <p className="text-[#5d5f5e] mb-6">{error ?? "We couldn't load this lesson."}</p>
+                    <Link
+                        href={`/courses/${courseId}`}
+                        className="inline-flex items-center px-5 py-3 rounded-full bg-[#1a1c1c] text-white font-semibold hover:bg-black transition-colors"
+                    >
+                        Back to Course
+                    </Link>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="bg-[#f9f9f9] text-[#1a1c1c] min-h-screen antialiased flex flex-col" style={{ fontFamily: "'Inter', sans-serif" }}>
-
-            {/* Top Navigation Anchor */}
-            <header className="fixed top-0 z-50 w-full bg-[#f9f9f9] flex justify-between items-center px-6 md:px-8 py-4 border-b border-[#e8e8e8]">
-                <div className="flex items-center gap-4">
-                    <Menu className="text-[#f3184c] cursor-pointer md:hidden" size={24} />
-                    <Link href="/" className="text-2xl font-bold tracking-tighter text-[#1a1c1c]" style={{ fontFamily: "'Manrope', sans-serif" }}>
-                        Learnova
-                    </Link>
-                </div>
-                <div className="flex items-center gap-6">
-                    <nav className="hidden md:flex gap-8 text-[#5d5f5e] text-xs font-bold tracking-widest uppercase">
-                        <Link href="/courses" className="hover:text-[#1a1c1c] transition-colors duration-300">Curriculum</Link>
-                        <Link href="/my-courses" className="text-[#f3184c]">Progress</Link>
-                        <Link href="#" className="hover:text-[#1a1c1c] transition-colors duration-300">Community</Link>
-                    </nav>
-                    <div className="w-10 h-10 rounded-full bg-[#f3f3f3] flex items-center justify-center overflow-hidden border-2 border-white shadow-sm">
-                        <img
-                            alt="User profile"
-                            className="w-full h-full object-cover"
-                            src="https://lh3.googleusercontent.com/aida-public/AB6AXuBJedneL-U80t6gSgDSjqjy6kH4CBx3u2n64Ih7mIMyRMhZT_15EqC2NOcP3H-7kRxPnntFPPUfcmbyht9y5dV2HWKE7xrC89Sq1EKaOHfIxoyWwVJt2fVGvYVjh__7V4DaeIOs5PP0NKhbdcFzJfJCvnydKiObLsD2dLX2BAqMb5Gxnc3hN4NKicHyxp0LJpi_dPHYPpHYYRQsk6IXF7flT78Iu25C8geMfa9iUsOP9jdGExLiS-_oYb21znptHXtLsxqj2PxL885V"
-                        />
+            <header className="fixed top-0 z-50 w-full bg-[#f9f9f9] border-b border-[#e8e8e8] px-6 md:px-8 py-4">
+                <div className="max-w-[1600px] mx-auto flex justify-between items-center">
+                    <div className="flex items-center gap-4">
+                        <Link href={`/courses/${course.id}`} className="text-[#f3184c] hover:text-[#e01445] transition-colors">
+                            <ArrowLeft size={20} />
+                        </Link>
+                        <Link href="/courses" className="text-2xl font-bold tracking-tighter text-[#1a1c1c]" style={{ fontFamily: "'Manrope', sans-serif" }}>
+                            Learnova
+                        </Link>
+                    </div>
+                    <div className="text-right">
+                        <p className="text-[10px] font-bold text-[#5d5f5e] uppercase tracking-widest">Current Course</p>
+                        <p className="text-sm font-semibold text-[#1a1c1c] max-w-[380px] truncate">{course.title}</p>
                     </div>
                 </div>
             </header>
 
-            {/* Main Layout Container */}
-            <div className="flex flex-col md:flex-row pt-[72px] flex-1">
-
-                {/* Sidebar Drawer */}
-                <aside className="fixed left-0 top-[72px] bottom-0 z-40 hidden md:flex flex-col w-[320px] bg-[#f3f3f3] overflow-y-auto border-r border-[#e8e8e8]">
+            <div className="flex flex-col md:flex-row pt-[78px] flex-1">
+                <aside className="fixed left-0 top-[78px] bottom-0 z-40 hidden md:flex flex-col w-[340px] bg-[#f3f3f3] overflow-y-auto border-r border-[#e8e8e8]">
                     <div className="p-8">
-                        <Link href={`/courses/${resolvedParams.courseId}`} className="flex items-center gap-2 text-[#f3184c] font-bold text-xs uppercase tracking-wider mb-8 hover:-translate-x-1 transition-transform w-fit">
+                        <Link href={`/courses/${course.id}`} className="flex items-center gap-2 text-[#f3184c] font-bold text-xs uppercase tracking-wider mb-8 hover:-translate-x-1 transition-transform w-fit">
                             <ArrowLeft size={14} />
                             Back to Course
                         </Link>
 
                         <h2 className="text-xl font-extrabold text-[#1a1c1c] mb-6" style={{ fontFamily: "'Manrope', sans-serif" }}>
-                            Modern UI Architecture
+                            {course.title}
                         </h2>
 
                         <div className="mb-10">
                             <div className="flex justify-between items-center mb-3">
                                 <span className="text-[10px] font-bold text-[#5d5f5e] uppercase tracking-widest">Overall Progress</span>
-                                <span className="text-xs font-bold text-[#f3184c]">65%</span>
+                                <span className="text-xs font-bold text-[#f3184c]">{overallProgress}%</span>
                             </div>
                             <div className="h-1.5 w-full bg-[#e2e2e2] rounded-full overflow-hidden">
-                                <div className="h-full bg-[#f3184c] rounded-full" style={{ width: "65%" }}></div>
+                                <div className="h-full bg-[#f3184c] rounded-full" style={{ width: `${overallProgress}%` }}></div>
                             </div>
+                            <p className="mt-2 text-[11px] text-[#5d5f5e]">
+                                {completedCount}/{sortedLessons.length} lessons completed
+                            </p>
                         </div>
 
-                        {/* Curriculum Modules */}
-                        <div className="space-y-8">
-                            <div>
-                                <h3 className="text-[10px] font-bold text-[#5d5f5e] uppercase tracking-[0.2em] mb-4">MODULE 01: FUNDAMENTALS</h3>
-                                <div className="space-y-1">
+                        <div className="space-y-2">
+                            {sortedLessons.map((lesson) => {
+                                const isCurrent = lesson.id === currentLesson.id;
+                                const isCompleted = completedLessonIds.has(lesson.id);
 
-                                    {/* Completed Lesson */}
-                                    <Link href="#" className="flex items-center gap-4 text-[#5d5f5e] py-4 px-4 hover:translate-x-1 transition-transform duration-200 rounded-xl hover:bg-white/50">
-                                        <CheckCircle2 className="text-[#f3184c] shrink-0" size={18} fill="currentColor" stroke="white" />
-                                        <div className="flex-1">
-                                            <p className="text-sm font-semibold">The Design Philosophy</p>
-                                            <p className="text-[10px] font-mono mt-0.5">08:45</p>
+                                return (
+                                    <Link
+                                        key={lesson.id}
+                                        href={`/learn/${course.id}/${lesson.id}`}
+                                        className={`flex items-center gap-4 py-4 px-4 rounded-2xl transition-all ${
+                                            isCurrent
+                                                ? "bg-white text-[#f3184c] shadow-sm border border-white"
+                                                : "text-[#5d5f5e] hover:bg-white/70"
+                                        }`}
+                                    >
+                                        <div className="shrink-0">
+                                            {isCompleted ? (
+                                                <CheckCircle2 className="text-[#f3184c]" size={18} fill="currentColor" stroke="white" />
+                                            ) : isCurrent ? (
+                                                <PlayCircle className="text-[#f3184c]" size={18} fill="currentColor" stroke="white" />
+                                            ) : (
+                                                <Circle className="text-[#9aa0a6]" size={16} />
+                                            )}
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <p className={`text-sm ${isCurrent ? "font-bold" : "font-semibold"} truncate`}>
+                                                {lesson.title || `Lesson ${lesson.sequence}`}
+                                            </p>
+                                            <p className="text-[10px] font-mono mt-0.5">{formatDuration(lesson.duration)}</p>
                                         </div>
                                     </Link>
-
-                                    {/* Active Lesson */}
-                                    <div className="flex items-center gap-4 bg-white text-[#f3184c] rounded-2xl py-4 px-4 shadow-sm border border-white">
-                                        <PlayCircle className="shrink-0" size={18} fill="currentColor" stroke="white" />
-                                        <div className="flex-1">
-                                            <p className="text-sm font-bold">Grid Systems &amp; Asymmetry</p>
-                                            <p className="text-[10px] font-mono mt-0.5">12:30 • In Progress</p>
-                                        </div>
-                                    </div>
-
-                                    {/* Locked Lesson */}
-                                    <div className="flex items-center gap-4 text-[#5d5f5e] opacity-60 py-4 px-4 cursor-not-allowed">
-                                        <Lock className="shrink-0" size={16} />
-                                        <div className="flex-1">
-                                            <p className="text-sm font-medium">Visual Hierarchy Rules</p>
-                                            <p className="text-[10px] font-mono mt-0.5">15:10</p>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div>
-                                <h3 className="text-[10px] font-bold text-[#5d5f5e] uppercase tracking-[0.2em] mb-4">MODULE 02: ADVANCED PATTERNS</h3>
-                                <div className="space-y-1">
-                                    <div className="flex items-center gap-4 text-[#5d5f5e] py-4 px-4 hover:translate-x-1 transition-transform duration-200">
-                                        <Circle className="shrink-0" size={16} />
-                                        <div className="flex-1">
-                                            <p className="text-sm font-medium">Glassmorphism Techniques</p>
-                                            <p className="text-[10px] font-mono mt-0.5">10:20</p>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
+                                );
+                            })}
                         </div>
-                    </div>
-
-                    {/* Sidebar Footer */}
-                    <div className="mt-auto p-8 pt-0 sticky bottom-0 bg-gradient-to-t from-[#f3f3f3] to-transparent">
-                        <button className="w-full flex items-center justify-center gap-3 bg-[#1a1c1c] hover:bg-black text-white py-4 rounded-full font-bold text-sm transition-transform active:scale-95 shadow-xl">
-                            <MessageSquare size={16} />
-                            Community Discussion
-                        </button>
                     </div>
                 </aside>
 
-                {/* Main Content Area */}
-                <main className="flex-1 md:ml-[320px] p-6 md:p-12 pb-32">
-
-                    {/* Lesson Header */}
+                <main className="flex-1 md:ml-[340px] p-6 md:p-12 pb-24">
                     <header className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-10">
-                        <div className="max-w-2xl">
-                            <span className="text-[10px] font-bold text-[#f3184c] uppercase tracking-[0.3em] mb-3 block">LESSON 04</span>
+                        <div className="max-w-3xl">
+                            <span className="text-[10px] font-bold text-[#f3184c] uppercase tracking-[0.3em] mb-3 block">
+                                LESSON {String(currentLessonIndex + 1).padStart(2, "0")}
+                            </span>
                             <h1 className="text-4xl md:text-5xl font-extrabold tracking-tight text-[#1a1c1c]" style={{ fontFamily: "'Manrope', sans-serif" }}>
-                                Grid Systems &amp; Asymmetry
+                                {currentLesson.title}
                             </h1>
                         </div>
-                        <div className="flex items-center gap-4">
-                            <a href="#" className="flex items-center gap-2 text-[#5d5f5e] hover:bg-[#e8e8e8] px-4 py-2 rounded-full font-bold text-xs uppercase tracking-widest hover:text-[#f3184c] transition-colors whitespace-nowrap">
+
+                        <div className="flex items-center gap-4 flex-wrap">
+                            <a href="#lesson-resources" className="flex items-center gap-2 text-[#5d5f5e] hover:bg-[#e8e8e8] px-4 py-2 rounded-full font-bold text-xs uppercase tracking-widest hover:text-[#f3184c] transition-colors whitespace-nowrap">
                                 <Download size={16} />
                                 Resources
                             </a>
-                            <button className="bg-[#f3184c] hover:bg-[#e01445] text-white px-8 py-4 rounded-full font-bold text-xs uppercase tracking-widest flex items-center gap-2 shadow-lg shadow-rose-500/20 transition-transform active:scale-95 whitespace-nowrap shrink-0">
-                                Next Lesson
-                                <ArrowRight size={16} />
-                            </button>
+
+                            {nextLesson ? (
+                                <Link
+                                    href={`/learn/${course.id}/${nextLesson.id}`}
+                                    className="bg-[#f3184c] hover:bg-[#e01445] text-white px-8 py-4 rounded-full font-bold text-xs uppercase tracking-widest flex items-center gap-2 shadow-lg shadow-rose-500/20 transition-transform active:scale-95 whitespace-nowrap"
+                                >
+                                    Next Lesson
+                                    <ArrowRight size={16} />
+                                </Link>
+                            ) : (
+                                <button
+                                    type="button"
+                                    disabled
+                                    className="bg-[#e8e8e8] text-[#a0a0a0] px-8 py-4 rounded-full font-bold text-xs uppercase tracking-widest flex items-center gap-2 whitespace-nowrap cursor-not-allowed"
+                                >
+                                    Course Complete
+                                </button>
+                            )}
                         </div>
                     </header>
 
-                    {/* Video Player with Video.js (fullscreen supported) */}
-                    <section className="mb-12">
+                    <section className="mb-10">
                         <LessonVideoPlayer
-                            src="https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"
+                            src={lessonVideoSrc}
                             poster="https://images.unsplash.com/photo-1542744094-3a31f272c490?q=80&w=2000&auto=format&fit=crop"
                         />
                     </section>
 
-                    {/* Lesson Details Grid */}
-                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-12">
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
+                        <section className="lg:col-span-2 bg-white rounded-[2rem] p-8 md:p-10 shadow-sm border border-[#e8e8e8]">
+                            <BlocksViewer data={lessonContent} />
+                        </section>
 
-                        {/* Left Content: Description & Editor.js JSON */}
-                        <div className="lg:col-span-2 space-y-12">
-
-                            {/* Magic! Render Editor.js JSON naturally within the page */}
-                            <section className="bg-white rounded-[2rem] p-8 md:p-10 shadow-sm border border-[#e8e8e8]">
-                                <BlocksViewer data={MOCK_LESSON_CONTENT} />
-                            </section>
-
-                            {/* Extra Feature Cards generated by Stitch */}
-                            <section className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                <div className="p-8 bg-white border border-[#e8e8e8] rounded-[2rem] shadow-[0_10px_30px_rgba(30,30,30,0.03)] hover:-translate-y-1 transition-transform">
-                                    <div className="w-12 h-12 rounded-full bg-rose-50 flex items-center justify-center mb-6">
-                                        <SquareDashed className="text-[#f3184c]" size={24} />
-                                    </div>
-                                    <h3 className="text-xl font-bold mb-3" style={{ fontFamily: "'Manrope', sans-serif" }}>Golden Ratios</h3>
-                                    <p className="text-[#5d5f5e] text-sm leading-relaxed">Applying mathematical perfection to asymmetrical layouts for visual balance.</p>
-                                </div>
-                                <div className="p-8 bg-white border border-[#e8e8e8] rounded-[2rem] shadow-[0_10px_30px_rgba(30,30,30,0.03)] hover:-translate-y-1 transition-transform">
-                                    <div className="w-12 h-12 rounded-full bg-[#f3f3f3] flex items-center justify-center mb-6">
-                                        <LayoutTemplate className="text-[#1a1c1c]" size={24} />
-                                    </div>
-                                    <h3 className="text-xl font-bold mb-3" style={{ fontFamily: "'Manrope', sans-serif" }}>Negative Space</h3>
-                                    <p className="text-[#5d5f5e] text-sm leading-relaxed">Using &quot;empty&quot; areas as a primary design element to guide user focus.</p>
-                                </div>
-                            </section>
-                        </div>
-
-                        {/* Right Content: Sidebar Resources */}
-                        <div className="space-y-6">
-
+                        <aside id="lesson-resources" className="space-y-6">
                             <div className="p-8 bg-white border border-[#e8e8e8] rounded-[2rem] shadow-sm">
-                                <h3 className="text-[10px] font-bold text-[#5d5f5e] uppercase tracking-[0.2em] mb-6">LESSON RESOURCES</h3>
-                                <div className="space-y-3">
-                                    <a href="#" className="flex items-center justify-between p-4 bg-[#f9f9f9] rounded-2xl hover:-translate-y-0.5 hover:shadow-md transition-all border border-transparent hover:border-[#f3f3f3]">
-                                        <div className="flex items-center gap-4">
-                                            <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center shadow-sm">
-                                                <FileText className="text-[#f3184c]" size={18} />
-                                            </div>
-                                            <div>
-                                                <span className="text-sm font-bold block text-[#1a1c1c]">Grid_Guidelines.pdf</span>
-                                                <span className="text-[10px] text-[#5d5f5e] uppercase tracking-widest block mt-1">1.2 MB</span>
-                                            </div>
-                                        </div>
-                                    </a>
+                                <h3 className="text-[10px] font-bold text-[#5d5f5e] uppercase tracking-[0.2em] mb-6">Lesson Resources</h3>
 
-                                    <a href="#" className="flex items-center justify-between p-4 bg-[#f9f9f9] rounded-2xl hover:-translate-y-0.5 hover:shadow-md transition-all border border-transparent hover:border-[#f3f3f3]">
-                                        <div className="flex items-center gap-4">
-                                            <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center shadow-sm">
-                                                <LinkIcon className="text-[#1a1c1c]" size={18} />
-                                            </div>
-                                            <div>
-                                                <span className="text-sm font-bold block text-[#1a1c1c]">Figma Template</span>
-                                                <span className="text-[10px] text-[#5d5f5e] uppercase tracking-widest block mt-1">External Link</span>
-                                            </div>
-                                        </div>
-                                    </a>
-                                </div>
+                                {currentLesson.attachments && currentLesson.attachments.length > 0 ? (
+                                    <div className="space-y-3">
+                                        {currentLesson.attachments.map((attachment) => (
+                                            <a
+                                                key={attachment.id}
+                                                href={attachment.attachment_url}
+                                                target="_blank"
+                                                rel="noreferrer"
+                                                className="flex items-center justify-between p-4 bg-[#f9f9f9] rounded-2xl hover:-translate-y-0.5 hover:shadow-md transition-all border border-transparent hover:border-[#f3f3f3]"
+                                            >
+                                                <div className="min-w-0">
+                                                    <span className="text-sm font-bold block text-[#1a1c1c] truncate">
+                                                        {attachment.attachment_name}
+                                                    </span>
+                                                    <span className="text-[10px] text-[#5d5f5e] uppercase tracking-widest block mt-1">
+                                                        {attachment.attachment_type === 2 ? "External Link" : "Download"}
+                                                    </span>
+                                                </div>
+                                                <ArrowRight size={16} className="text-[#f3184c] shrink-0" />
+                                            </a>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <p className="text-sm text-[#5d5f5e]">No resources attached to this lesson yet.</p>
+                                )}
                             </div>
 
-                            <div className="p-8 bg-[#111212] text-white rounded-[2rem] shadow-2xl relative overflow-hidden group">
-                                <div className="absolute -right-8 -bottom-8 w-32 h-32 bg-[#f3184c]/20 rounded-full blur-[40px] group-hover:bg-[#f3184c]/30 transition-colors"></div>
+                            <div className="p-8 bg-[#111212] text-white rounded-[2rem] shadow-2xl relative overflow-hidden">
+                                <div className="absolute -right-8 -bottom-8 w-32 h-32 bg-[#f3184c]/20 rounded-full blur-[40px]"></div>
                                 <div className="relative z-10">
-                                    <h3 className="text-xl font-extrabold mb-3" style={{ fontFamily: "'Manrope', sans-serif" }}>Need help with this module?</h3>
-                                    <p className="text-sm text-[#a0a0a0] leading-relaxed mb-6">Our mentors are available 24/7 for design critiques and technical advice.</p>
-                                    <button className="text-[10px] font-black uppercase tracking-widest text-[#f3184c] flex items-center gap-2 group-hover:text-white transition-colors bg-white/5 py-3 px-5 rounded-full backdrop-blur-sm border border-white/10">
-                                        Message Mentor
-                                        <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform" />
-                                    </button>
+                                    <h3 className="text-xl font-extrabold mb-3" style={{ fontFamily: "'Manrope', sans-serif" }}>
+                                        Continue Your Journey
+                                    </h3>
+                                    <p className="text-sm text-[#a0a0a0] leading-relaxed mb-6">
+                                        Stay consistent. Complete each lesson to increase your progress and points.
+                                    </p>
+                                    {nextLesson ? (
+                                        <Link
+                                            href={`/learn/${course.id}/${nextLesson.id}`}
+                                            className="text-[10px] font-black uppercase tracking-widest text-[#f3184c] flex items-center gap-2 hover:text-white transition-colors bg-white/5 py-3 px-5 rounded-full backdrop-blur-sm border border-white/10 w-fit"
+                                        >
+                                            Go to Next Lesson
+                                            <ArrowRight size={14} />
+                                        </Link>
+                                    ) : (
+                                        <span className="text-[10px] font-black uppercase tracking-widest text-white/70 bg-white/5 py-3 px-5 rounded-full border border-white/10 inline-flex">
+                                            You completed all lessons
+                                        </span>
+                                    )}
                                 </div>
                             </div>
-
-                        </div>
+                        </aside>
                     </div>
                 </main>
             </div>
-
-            {/* Mobile Bottom Navigation Bar */}
-            <nav className="md:hidden fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-6 pb-8 pt-4 bg-white/80 backdrop-blur-xl border-t border-[#e8e8e8] rounded-t-[2.5rem] shadow-[0_-10px_40px_rgba(0,0,0,0.05)]">
-                <Link href={`/courses/${resolvedParams.courseId}`} className="flex flex-col items-center justify-center text-[#5d5f5e]">
-                    <ArrowLeft size={20} />
-                    <span className="text-[10px] font-bold uppercase tracking-widest mt-1.5">Go Back</span>
-                </Link>
-                <div className="flex flex-col items-center justify-center text-[#5d5f5e] relative -top-3">
-                    <div className="w-14 h-14 bg-white border border-[#e8e8e8] shadow-lg rounded-full flex items-center justify-center hover:text-[#f3184c] transition-colors">
-                        <MessageCircle size={24} />
-                    </div>
-                    <span className="text-[10px] font-bold uppercase tracking-widest mt-2">Discuss</span>
-                </div>
-                <div className="flex flex-col items-center justify-center w-12 h-12 bg-[#f3184c] text-white rounded-full shadow-lg shadow-rose-500/30 active:scale-95 transition-transform">
-                    <ArrowRight size={20} />
-                </div>
-            </nav>
-
         </div>
     );
 }

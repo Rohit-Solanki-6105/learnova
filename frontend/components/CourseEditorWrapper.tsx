@@ -84,6 +84,23 @@ function statusBadgeClass(status: number) {
     return "bg-amber-100 text-amber-700";
 }
 
+async function extractApiErrorMessage(res: Response): Promise<string> {
+    try {
+        const data = await res.json();
+        if (typeof data?.error === "string") return data.error;
+        if (typeof data?.detail === "string") return data.detail;
+        if (Array.isArray(data?.description) && data.description.length > 0) {
+            return String(data.description[0]);
+        }
+        if (Array.isArray(data?.title) && data.title.length > 0) {
+            return String(data.title[0]);
+        }
+        return JSON.stringify(data);
+    } catch {
+        return `Request failed (${res.status})`;
+    }
+}
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function CourseEditorWrapper({ courseId, role }: CourseEditorProps) {
@@ -240,12 +257,17 @@ export default function CourseEditorWrapper({ courseId, role }: CourseEditorProp
             body: JSON.stringify({
                 course: numericId,
                 title: "New Quiz",
-                description: "",
+                // Quiz.description is required by backend serializer.
+                description: defaultQuizData.quizSynopsis,
                 sequence: nextSeq(),
                 data: defaultQuizData,
             }),
         });
-        if (!res.ok) { toast.error("Failed to create quiz"); return; }
+        if (!res.ok) {
+            const errMsg = await extractApiErrorMessage(res);
+            toast.error(`Failed to create quiz: ${errMsg}`);
+            return;
+        }
         const quiz: QuizFromApi = await res.json();
         setContentItems(prev => [...prev, { kind: "quiz", id: quiz.id, title: quiz.title, sequence: quiz.sequence }]);
         setEditingQuiz(quiz);
@@ -815,20 +837,29 @@ function QuizEditView({ quiz, onClose }: { quiz: QuizFromApi; onClose: () => voi
     const handleSave = async () => {
         setSaving(true);
         try {
+            const safeDescription =
+                description.trim() ||
+                quizData.quizSynopsis?.trim() ||
+                "Quiz description";
+
             const res = await fetchWithAuth(`/quizzes/${quiz.id}/`, {
                 method: "PATCH",
                 body: JSON.stringify({
                     title,
-                    description,
+                    description: safeDescription,
                     duration: quizDuration,
                     data: quizData,
                 }),
             });
-            if (!res.ok) throw new Error("Save failed");
+            if (!res.ok) {
+                const errMsg = await extractApiErrorMessage(res);
+                throw new Error(errMsg);
+            }
             toast.success("Quiz saved!");
             onClose();
-        } catch {
-            toast.error("Failed to save quiz");
+        } catch (err: unknown) {
+            const msg = err instanceof Error ? err.message : "Failed to save quiz";
+            toast.error(`Failed to save quiz: ${msg}`);
         } finally {
             setSaving(false);
         }

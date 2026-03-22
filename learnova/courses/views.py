@@ -18,6 +18,14 @@ class CourseViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         """Filter courses based on status and visibility."""
         queryset = Course.objects.select_related('created_by', 'responsible').prefetch_related('tags', 'lessons', 'quizzes')
+
+        user = self.request.user
+        is_authenticated = bool(user and user.is_authenticated)
+        is_admin_or_instructor = is_authenticated and getattr(user, 'role', None) in (1, 2)
+
+        # Learners and anonymous users should only see public, published courses.
+        if not is_admin_or_instructor:
+            queryset = queryset.filter(status=2, visibility=1)
         
         # Filter by status (1=Draft, 2=Published, 3=Archived)
         status = self.request.query_params.get('status')
@@ -40,6 +48,9 @@ class CourseViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         serializer.save(created_by=self.request.user)
+
+    def perform_update(self, serializer):
+        serializer.save(updated_by=self.request.user)
 
 
 class LessonViewSet(viewsets.ModelViewSet):

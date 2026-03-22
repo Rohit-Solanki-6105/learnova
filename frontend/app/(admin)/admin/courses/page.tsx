@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from "react";
 import { Kanban } from "react-kanban-kit";
-import { Search, LayoutGrid, List, Plus, Edit2, Eye, Clock, BookOpen, Loader2, AlertCircle } from "lucide-react";
+import { Search, LayoutGrid, List, Plus, Edit2, Clock, BookOpen, Loader2, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import CreateCourseModal from "@/components/CreateCourseModal";
@@ -11,6 +11,19 @@ import { fetchWithAuth } from "@/lib/auth";
 type CourseStatus = "Draft" | "Published" | "Archived";
 
 const STATUS_NUM_TO_STR: Record<number, CourseStatus> = { 1: "Draft", 2: "Published", 3: "Archived" };
+const STATUS_STR_TO_NUM: Record<CourseStatus, number> = { Draft: 1, Published: 2, Archived: 3 };
+
+type ApiTag = string | { name: string };
+
+interface ApiCourse {
+    id: string | number;
+    title?: string;
+    tags?: ApiTag[];
+    total_lesson?: number;
+    total_duration?: number;
+    lessons?: unknown[];
+    status?: number;
+}
 
 type Course = {
     id: string;
@@ -22,11 +35,11 @@ type Course = {
     status: CourseStatus;
 };
 
-function mapApiCourse(c: any): Course {
+function mapApiCourse(c: ApiCourse): Course {
     return {
         id: String(c.id),
-        title: c.title,
-        tags: (c.tags || []).map((t: any) => (typeof t === "string" ? t : t.name)),
+        title: c.title ?? "Untitled Course",
+        tags: (c.tags || []).map((t) => (typeof t === "string" ? t : t.name)),
         views: 0,
         totalLessons: c.total_lesson ?? (c.lessons?.length ?? 0),
         totalDuration: c.total_duration ? `${c.total_duration}m` : "—",
@@ -49,10 +62,14 @@ export default function CoursesAdminPage() {
         try {
             const res = await fetchWithAuth("/courses/");
             if (!res.ok) throw new Error(`Server responded with ${res.status}`);
-            const data = await res.json();
-            setCourses(data.map(mapApiCourse));
-        } catch (err: any) {
-            setFetchError(err.message || "Failed to load courses");
+            const data: unknown = await res.json();
+            if (Array.isArray(data)) {
+                setCourses(data.map((item) => mapApiCourse(item as ApiCourse)));
+            } else {
+                setCourses([]);
+            }
+        } catch (err: unknown) {
+            setFetchError(err instanceof Error ? err.message : "Failed to load courses");
         } finally {
             setLoading(false);
         }
@@ -77,7 +94,7 @@ export default function CoursesAdminPage() {
     const publishedCourses = filteredCourses.filter(c => c.status === "Published");
     const archivedCourses  = filteredCourses.filter(c => c.status === "Archived");
 
-    const kanbanDataSource: any = {
+    const kanbanDataSource: Record<string, unknown> = {
         root: { id: "root", title: "Root", children: ["col-draft", "col-published", "col-archived"], totalChildrenCount: 3, parentId: null },
         "col-draft":     { id: "col-draft",     title: "Draft",     children: draftCourses.map(c => c.id),     totalChildrenCount: draftCourses.length,     parentId: "root" },
         "col-published": { id: "col-published", title: "Published", children: publishedCourses.map(c => c.id), totalChildrenCount: publishedCourses.length, parentId: "root" },
@@ -94,7 +111,7 @@ export default function CoursesAdminPage() {
 
     const configMap = {
         card: {
-            render: ({ data }: any) => {
+            render: ({ data }: { data: { content: Course } }) => {
                 const c: Course = data.content;
                 return (
                     <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex flex-col gap-3 w-full">
@@ -129,17 +146,58 @@ export default function CoursesAdminPage() {
         },
     };
 
-    const onCardMove = (moveInfo: any) => {
+    const onCardMove = async (moveInfo: { cardId: string; toColumnId: string }) => {
         const { cardId, toColumnId } = moveInfo;
         const match = toColumnId?.match(/col-(.*)/);
         if (!match) return;
         const newStatus = (match[1].charAt(0).toUpperCase() + match[1].slice(1)) as CourseStatus;
-        setCourses(prev => prev.map(c => c.id === cardId ? { ...c, status: newStatus } : c));
-        // Persist status change
-        const numStatus = { Draft: 1, Published: 2, Archived: 3 }[newStatus];
-        fetchWithAuth(`/courses/${cardId}/`, { method: "PATCH", body: JSON.stringify({ status: numStatus }) })
-            .then(r => { if (!r.ok) toast.error("Failed to update course status"); })
-            .catch(() => toast.error("Network error while updating status"));
+
+        const normalizedCardId = String(cardId);
+        const prevCourse = courses.find((c) => c.id === normalizedCardId);
+        if (!prevCourse || prevCourse.status === newStatus) return;
+
+        setCourses((prev) =>
+            prev.map((c) => (c.id === normalizedCardId ? { ...c, status: newStatus } : c))
+        );
+
+        const numStatus = STATUS_STR_TO_NUM[newStatus];
+        if (!numStatus) {
+            setCourses((prev) =>
+                prev.map((c) => (c.id === normalizedCardId ? { ...c, status: prevCourse.status } : c))
+            );
+            toast.error("Invalid course status");
+            return;
+        }
+
+        try {
+            const res = await fetchWithAuth(`/courses/${normalizedCardId}/`, {
+                method: "PATCH",
+                body: JSON.stringify({ status: numStatus }),
+            });
+
+            if (!res.ok) {
+                setCourses((prev) =>
+                    prev.map((c) => (c.id === normalizedCardId ? { ...c, status: prevCourse.status } : c))
+                );
+                toast.error("Failed to update course status in database");
+                return;
+            }
+
+            const updated = await res.json().catch(() => null);
+            if (updated && typeof updated.status === "number") {
+                const confirmedStatus = STATUS_NUM_TO_STR[updated.status] ?? prevCourse.status;
+                setCourses((prev) =>
+                    prev.map((c) => (c.id === normalizedCardId ? { ...c, status: confirmedStatus } : c))
+                );
+            }
+
+            toast.success(`Course moved to ${newStatus}`);
+        } catch {
+            setCourses((prev) =>
+                prev.map((c) => (c.id === normalizedCardId ? { ...c, status: prevCourse.status } : c))
+            );
+            toast.error("Network error while updating status");
+        }
     };
 
     return (
@@ -195,7 +253,7 @@ export default function CoursesAdminPage() {
                 <div className="flex flex-col items-center justify-center py-24 gap-4 text-gray-400 text-center">
                     <BookOpen size={56} className="opacity-30" />
                     <p className="font-semibold text-gray-500">No courses yet</p>
-                    <p className="text-sm">Click "Create Course" to get started.</p>
+                    <p className="text-sm">Click &quot;Create Course&quot; to get started.</p>
                 </div>
             )}
 
@@ -250,7 +308,7 @@ export default function CoursesAdminPage() {
                                 </tr>
                             ))}
                             {filteredCourses.length === 0 && (
-                                <tr><td colSpan={4} className="py-10 text-center text-gray-400 text-sm">No courses match "{searchQuery}"</td></tr>
+                                <tr><td colSpan={4} className="py-10 text-center text-gray-400 text-sm">No courses match &quot;{searchQuery}&quot;</td></tr>
                             )}
                         </tbody>
                     </table>

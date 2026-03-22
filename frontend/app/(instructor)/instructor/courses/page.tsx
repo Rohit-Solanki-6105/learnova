@@ -20,15 +20,52 @@ interface Course {
     status: string;
     totalLessons: number;
     totalDuration: string;
+    price: string | number | null;
 }
 
-function mapApiCourse(c: any): Course {
+interface ApiCourse {
+    id: string | number;
+    title?: string;
+    status?: number;
+    total_lesson?: number;
+    total_duration?: number;
+    lessons?: unknown[];
+    price?: string | number | null;
+}
+
+interface NewCoursePayload extends Partial<ApiCourse> {
+    id: string | number;
+}
+
+const USD_TO_INR_RATE = 83;
+
+function parsePrice(price: string | number | null): number | null {
+    if (price == null) return null;
+    const n = parseFloat(String(price));
+    if (Number.isNaN(n) || n === 0) return null;
+    return n;
+}
+
+function formatPriceUsd(price: string | number | null): string {
+    const n = parsePrice(price);
+    if (n == null) return "Free";
+    return `$${n.toFixed(2)}`;
+}
+
+function formatPriceInr(price: string | number | null): string {
+    const n = parsePrice(price);
+    if (n == null) return "₹0";
+    return `₹${(n * USD_TO_INR_RATE).toFixed(2)}`;
+}
+
+function mapApiCourse(c: ApiCourse): Course {
     return {
         id: String(c.id),
-        title: c.title,
+        title: c.title ?? "Untitled Course",
         status: STATUS_MAP[c.status] ?? "Draft",
         totalLessons: c.total_lesson ?? (c.lessons?.length ?? 0),
         totalDuration: c.total_duration ? `${c.total_duration}m` : "—",
+        price: c.price ?? null,
     };
 }
 
@@ -46,10 +83,14 @@ export default function InstructorCoursesPage() {
         try {
             const res = await fetchWithAuth("/courses/");
             if (!res.ok) throw new Error(`Server responded with ${res.status}`);
-            const data = await res.json();
-            setCourses(data.map(mapApiCourse));
-        } catch (err: any) {
-            setFetchError(err.message || "Failed to load courses");
+            const data: unknown = await res.json();
+            if (Array.isArray(data)) {
+                setCourses(data.map((item) => mapApiCourse(item as ApiCourse)));
+            } else {
+                setCourses([]);
+            }
+        } catch (err: unknown) {
+            setFetchError(err instanceof Error ? err.message : "Failed to load courses");
         } finally {
             setLoading(false);
         }
@@ -57,7 +98,7 @@ export default function InstructorCoursesPage() {
 
     useEffect(() => { loadCourses(); }, [loadCourses]);
 
-    const onCourseCreated = (newCourse: any) => {
+    const onCourseCreated = (newCourse: NewCoursePayload) => {
         setCourses(prev => [...prev, mapApiCourse({ ...newCourse, id: newCourse.id, status: 1 })]);
         setIsModalOpen(false);
         toast.success("Course created!", {
@@ -112,7 +153,7 @@ export default function InstructorCoursesPage() {
                 <div className="flex flex-col items-center justify-center py-28 gap-4 text-gray-400 text-center">
                     <BookOpen size={56} className="opacity-25" />
                     <p className="font-semibold text-gray-500">No courses yet</p>
-                    <p className="text-sm">Click "Create Course" to start building your first course.</p>
+                    <p className="text-sm">Click &quot;Create Course&quot; to start building your first course.</p>
                 </div>
             )}
 
@@ -134,6 +175,10 @@ export default function InstructorCoursesPage() {
                                     <span className="flex items-center gap-1"><BookOpen size={12} /> {course.totalLessons} lessons</span>
                                     <span className="flex items-center gap-1"><Clock size={12} /> {course.totalDuration}</span>
                                 </div>
+                                <div className="mb-4">
+                                    <p className="text-sm font-semibold text-gray-800">{formatPriceUsd(course.price)}</p>
+                                    <p className="text-xs text-gray-500">{formatPriceInr(course.price)}</p>
+                                </div>
                                 <div className="mt-auto pt-3 border-t border-gray-100">
                                     <a
                                         href={`/instructor/courses/${course.id}`}
@@ -146,7 +191,7 @@ export default function InstructorCoursesPage() {
                         </div>
                     ))}
                     {filtered.length === 0 && (
-                        <div className="col-span-3 text-center py-12 text-gray-400 text-sm">No courses match "{search}"</div>
+                        <div className="col-span-3 text-center py-12 text-gray-400 text-sm">No courses match &quot;{search}&quot;</div>
                     )}
                 </div>
             )}
